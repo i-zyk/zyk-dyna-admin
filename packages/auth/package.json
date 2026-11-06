@@ -1,0 +1,21 @@
+{
+  "name": "@zyk-dyna-admin/auth",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@better-auth/expo": "catalog:",
+    "@zyk-dyna-admin/db": "workspace:*",
+    "better-auth": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@zyk-dyna-admin/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

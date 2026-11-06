@@ -1,0 +1,3 @@
+{
+  "extends": "@zyk-dyna-admin/config/tsconfig.base.json"
+}

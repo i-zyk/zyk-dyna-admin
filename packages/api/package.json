@@ -1,0 +1,22 @@
+{
+  "name": "@zyk-dyna-admin/api",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "@zyk-dyna-admin/auth": "workspace:*",
+    "@zyk-dyna-admin/db": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@zyk-dyna-admin/config": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}
