@@ -1,6 +1,6 @@
 import type { Context as ApiContext } from "@zyk-dyna-admin/api/context";
 import type { Context as HonoContext } from "hono";
-import { auth, db } from "./services";
+import { auth, db, github } from "./services";
 
 export interface CreateContextOptions {
 	context: HonoContext;
@@ -14,6 +14,7 @@ export async function createContext({
 	});
 	return {
 		db,
+		github,
 		session,
 	};
 }

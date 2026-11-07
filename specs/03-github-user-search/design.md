@@ -22,7 +22,7 @@
 2. **组装与注入**：`apps/server/src/services.ts` 中 `export const github = createGithubClient(ENV)`；`packages/api/src/context.ts` 的 `Context` 增加 `github: GithubClient`；`apps/server/src/context.ts` 的 `createContext` 返回 `{ db, session, github }`。
 3. **tRPC 子路由**（`packages/api/src/routers/github.ts`）：`githubRouter = router({ getUser: protectedProcedure.input(z.object({ username: githubUsernameSchema })).query(...) })`，捕获 `GithubApiError` 映射为 `TRPCError`：`not_found` → `NOT_FOUND`、`rate_limited` → `TOO_MANY_REQUESTS`、`upstream` → `INTERNAL_SERVER_ERROR`。在 `routers/index.ts` 合并为 `github: githubRouter`。
 4. **环境变量**：`apps/server/.env.schema` 增加 `GITHUB_TOKEN`，用 `# @optional`（继承文件头的 `@defaultSensitive=true`，不写默认值）；执行 `pnpm run env:generate`；`turbo.json` 的 `globalEnv` 加入 `GITHUB_TOKEN`。
-5. **前端页面**：`/dashboard/page.tsx` 保留服务端 session 校验，页面内容替换为 `GithubUserSearch`。`GithubUserSearch` 用 TanStack Form + Zod 做搜索表单（提交时校验，空输入直接忽略，格式不合法显示「GitHub 用户名格式不正确」）；校验通过后把 trim + 小写后的用户名存到 state，驱动 `useQuery(trpc.github.getUser.queryOptions({ username }, { enabled: username !== null, staleTime: FIVE_MINUTES_MS, retry: false, meta: { skipGlobalErrorToast: true } }))`。根据 `isFetching` 显示骨架屏，根据 `error.data?.code` 显示中文错误，成功时渲染 `GithubUserCard`。
+5. **前端页面**：`/dashboard/page.tsx` 保留服务端 session 校验，页面内容替换为 `GithubUserSearch`。`GithubUserSearch` 用 TanStack Form 做搜索表单，字段的 `onSubmit` 校验器复用 `parseGithubUsernameInput()`（与后端同一正则，不再单独写 Zod schema；空输入直接忽略，格式不合法显示「GitHub 用户名格式不正确」并清掉上一次结果）；校验通过后把 trim + 小写后的用户名存到 state，驱动 `useQuery(trpc.github.getUser.queryOptions(username === null ? skipToken : { username }, { staleTime: 5 分钟, retry: false, meta: { skipGlobalErrorToast: true } }))`（用 `skipToken` 代替 `enabled: username !== null`，避免为禁用状态构造假的入参，效果相同）。同一用户名上次查询失败时再次提交会调用 `refetch()` 重新请求（错误结果不缓存）。根据 `isFetching` 显示骨架屏并禁用「搜索」按钮，根据 `error.data?.code` 经 `getGithubSearchErrorMessage()`（`apps/web/src/lib/github-search-errors.ts`）显示中文错误，成功时渲染 `GithubUserCard`。
 6. **全局错误 toast**：`apps/web/src/utils/trpc.ts` 的 `QueryCache.onError` 在 `query.meta?.skipGlobalErrorToast` 为 true 时跳过，避免页面内错误提示和 toast 重复。
 7. **UI 组件**：用 `npx shadcn@latest add avatar -c packages/ui` 添加 `Avatar`；卡片使用已有的 `Card`、`Input`、`Button`、`Label`、`Skeleton`。
 8. **原有示例**：`dashboard.tsx` 中调用 `privateData` 的示例展示被搜索组件替换；`privateData` 路由本身保留不动。
@@ -44,6 +44,7 @@
 | `packages/ui/src/components/avatar.tsx`（新建） | shadcn CLI 生成 |
 | `apps/web/src/lib/github-username.ts`（新建） | 前端校验用的同一正则（前端不能运行时导入 api 包） |
 | `apps/web/src/lib/github-profile-format.ts`（新建） | `formatJoinedDate()`、`normalizeBlogUrl()` |
+| `apps/web/src/lib/github-search-errors.ts`（新建） | `getGithubSearchErrorMessage()`：TRPCError code → 中文提示 |
 | `apps/web/src/components/github-user-search.tsx`（新建） | 搜索表单、查询、错误与加载状态 |
 | `apps/web/src/components/github-user-card.tsx`（新建） | 资料卡片与骨架屏 |
 | `apps/web/src/app/dashboard/page.tsx`、`apps/web/src/app/dashboard/dashboard.tsx` | 渲染搜索组件 |
@@ -91,8 +92,9 @@ TRPCError 的 `message` 只写通用英文描述，不带 Token、不带 GitHub 
 
 **前端格式化**：
 
-- `formatJoinedDate(iso)`：取 UTC 日期，输出 `YYYY-MM-DD`（技术参考未规定时区，暂按 UTC，与 GitHub 返回值一致）。
-- `normalizeBlogUrl(blog)`：没有协议时补 `https://`；只接受 `http:` / `https:`，其他协议（如 `javascript:`）不渲染成链接，只显示文本。
+- `parseGithubUsernameInput(input)`：返回 `{ status: "empty" }` / `{ status: "invalid" }` / `{ status: "valid", username }`（trim 后小写）；格式错误文案常量 `GITHUB_USERNAME_INVALID_MESSAGE` 同文件导出。
+- `formatJoinedDate(iso)`：取 UTC 日期，输出 `YYYY-MM-DD`（技术参考未规定时区，暂按 UTC，与 GitHub 返回值一致）；无法解析时返回 `null`，卡片不渲染该行。
+- `normalizeBlogUrl(blog)`：返回可用作 `href` 的地址或 `null`。没有协议时补 `https://`（`host:port` 视为无协议，`//host` 补 `https:`）；只接受 `http:` / `https:`，其他协议（如 `javascript:`）或无法解析时返回 `null`，卡片只显示文本、不渲染成链接。
 
 ## 关键流程
 
@@ -127,7 +129,7 @@ sequenceDiagram
 - 缓存：`staleTime` 5 分钟；`gcTime` 保持默认 5 分钟（从查询不再被观察时开始计时），切换搜索其他用户后再搜回来，5 分钟内仍命中。错误结果不缓存（下次搜索重新请求）。
 - 重试：`retry: false`，避免 404 / 429 时 TanStack Query 默认重试 3 次加重频率限制。
 - 空字段：`name` 为空显示 `login`；`bio`、`company`、`location`、`blog` 为 `null` 时整行不渲染；数字字段为 0 时正常显示 `0`。
-- 长文本：简介、博客地址使用 `break-words` / `min-w-0`，375px 下不撑出横向滚动。
+- 长文本：简介、博客地址使用 `wrap-anywhere`（overflow-wrap: anywhere）/ `min-w-0`，375px 下不撑出横向滚动（`break-words` 不会降低 min-content 宽度，在布局的 grid 自动列里超长无空格文本仍会撑宽页面）。
 - 头像加载失败：`AvatarFallback` 显示 `login` 首字母；`alt` 为「<login> 的头像」。
 - 403 的含义：GitHub 的 403 也可能是其他拒绝原因，PRD 明确要求 403 一律按频率超限提示，照此实现。
 - 加载中再次提交：按钮在 `isFetching` 时禁用。
