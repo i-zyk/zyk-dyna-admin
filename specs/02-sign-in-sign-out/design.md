@@ -15,21 +15,24 @@
 ## 方案概述
 
 1. **登录表单**：`sign-in-form.tsx` 字段改为「用户名或邮箱」（`identifier`）和「密码」，只做必填校验（不在登录时校验密码长度或用户名格式，避免泄露规则差异）。提交时 `identifier.trim()` 后判断是否包含 `@`：包含则 `authClient.signIn.email({ email, password })`，否则 `authClient.signIn.username({ username, password })`。
-2. **统一错误**：登录返回任何认证类错误（`INVALID_EMAIL_OR_PASSWORD`、`INVALID_USERNAME_OR_PASSWORD`、`INVALID_EMAIL`、`USERNAME_TOO_SHORT`、`USERNAME_TOO_LONG`、`INVALID_USERNAME`，即 HTTP 400 / 401 / 422）时，统一显示「账号或密码错误」；网络错误或 5xx 显示「登录失败，请稍后再试」（技术参考未规定，暂按此区分，二者都不透露账号是否存在）。映射函数放进 R01 的 `auth-errors.ts`。
-3. **`/login` 已登录重定向**：把 `apps/web/src/app/login/page.tsx` 改成 Server Component，按 `dashboard/page.tsx` 的方式 `authClient.getSession({ fetchOptions: { headers: await headers() } })`，有 session 就 `redirect("/dashboard")`；否则渲染新的客户端组件 `auth-panel.tsx`（原页面里的登录 / 注册切换状态移到这里）。
+2. **统一错误**：登录返回任何认证类错误（`INVALID_EMAIL_OR_PASSWORD`、`INVALID_USERNAME_OR_PASSWORD`、`INVALID_EMAIL`、`USERNAME_TOO_SHORT`、`USERNAME_TOO_LONG`、`INVALID_USERNAME`，即 HTTP 400 / 401 / 422）时，统一显示「账号或密码错误」；网络错误或 5xx 显示「登录失败，请稍后再试」（技术参考未规定，暂按此区分，二者都不透露账号是否存在）。映射函数放进 R01 的 `auth-errors.ts`。登录失败提示以 `role="alert"` 的行内文字显示在提交按钮上方（不用 toast，便于读屏和测试），修改任一输入框时清除。
+3. **`/login` 已登录重定向**：把 `apps/web/src/app/login/page.tsx` 改成 Server Component，按 `dashboard/page.tsx` 的方式 `authClient.getSession({ fetchOptions: { headers: await headers() } })`，有 session 就 `redirect("/dashboard")`；否则渲染新的客户端组件 `auth-panel.tsx`（原页面里的登录 / 注册切换状态移到这里）。与 `dashboard/page.tsx` 不同，这里不传 `throw: true`：取 session 失败（如 server 不可用）时按未登录处理，仍显示登录表单，而不是让登录页报错。
 4. **`/dashboard` 未登录重定向**：现有 `dashboard/page.tsx` 已有该逻辑，保留并补测试。
-5. **用户菜单**：`user-menu.tsx` 触发按钮显示用户名（`displayUsername ?? username ?? name`，已确认），下拉中显示用户名和邮箱，菜单项「退出登录」调用 `authClient.signOut`，成功后 `router.push("/login")` 并 `router.refresh()`，清掉 App Router 缓存的已登录页面。未登录时显示「登录」按钮。文案统一中文。
+5. **用户菜单**：`user-menu.tsx` 触发按钮显示用户名（`displayUsername ?? username ?? name`，已确认），下拉中显示用户名和邮箱，菜单项「退出登录」调用 `authClient.signOut`，成功后 `router.push("/login")` 并 `router.refresh()`，清掉 App Router 缓存的已登录页面；退出失败时 toast 提示「退出登录失败，请稍后再试」。未登录时显示按钮样式的「登录」链接（`<Link>` + `buttonVariants`，语义是链接，避免原来 `<Link><Button>` 的交互元素嵌套）。文案统一中文。触发按钮限宽并截断过长的名字；`header.tsx` 根元素加 `min-w-0`，避免导航栏最小内容宽度撑宽根布局的 grid 列，保证 375px 下顶部导航不出现横向滚动。
 
 ## 涉及模块 / 文件
 
 | 文件 | 改动 |
 | --- | --- |
 | `apps/web/src/components/sign-in-form.tsx` | 重写字段、校验、提交分支和错误展示 |
+| `apps/web/src/components/field-messages.tsx`（新建） | 从 `sign-up-form.tsx` 抽出的字段错误展示（`toMessages`、`FieldMessages`、`getFieldA11yProps`），登录 / 注册表单共用 |
+| `apps/web/src/components/sign-up-form.tsx` | 改为从 `field-messages.tsx` 导入上述工具，不改行为 |
 | `apps/web/src/lib/auth-validation.ts` | 新增 `signInSchema`（`identifier`、`password` 必填）与 `isEmailIdentifier()` |
 | `apps/web/src/lib/auth-errors.ts` | 新增 `getSignInErrorMessage()` |
 | `apps/web/src/app/login/page.tsx` | 改为 Server Component，已登录重定向 |
 | `apps/web/src/components/auth-panel.tsx`（新建） | 客户端组件，承载登录 / 注册切换 |
 | `apps/web/src/components/user-menu.tsx` | 显示用户名 + 邮箱，「退出登录」后跳 `/login` |
+| `apps/web/src/components/header.tsx` | 布局微调（`min-w-0`、`gap-2`），窄屏下由用户菜单按钮截断名字，不出现横向滚动 |
 | `apps/web/src/app/dashboard/page.tsx` | 保持未登录重定向，不改逻辑 |
 | `apps/web/src/lib/auth-validation.test.ts`、`apps/web/src/lib/auth-errors.test.ts`、`apps/web/e2e/sign-in.spec.ts` | 测试 |
 

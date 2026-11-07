@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
 	AUTH_VALIDATION_MESSAGES,
 	emailSchema,
+	isEmailIdentifier,
 	PASSWORD_MAX_LENGTH,
 	PASSWORD_MIN_LENGTH,
 	passwordSchema,
+	signInSchema,
 	signUpSchema,
 	USERNAME_MAX_LENGTH,
 	usernameSchema,
@@ -162,5 +164,89 @@ describe("signUpSchema", () => {
 				path: ["confirmPassword"],
 			}),
 		]);
+	});
+});
+
+describe("isEmailIdentifier", () => {
+	it.each(["a@b.co", "TOM@EXAMPLE.COM", "a@b", "@"])(
+		"%j 包含 @ → 按邮箱登录",
+		(value) => {
+			expect(isEmailIdentifier(value)).toBe(true);
+		}
+	);
+
+	it.each(["tom", "TOM", "ab", "tom.lee_1", ""])(
+		"%j 不含 @ → 按用户名登录",
+		(value) => {
+			expect(isEmailIdentifier(value)).toBe(false);
+		}
+	);
+});
+
+describe("signInSchema", () => {
+	it("提示文案与需求一致", () => {
+		expect(AUTH_VALIDATION_MESSAGES.identifierRequired).toBe(
+			"请输入用户名或邮箱"
+		);
+		expect(AUTH_VALIDATION_MESSAGES.passwordRequired).toBe("请输入密码");
+	});
+
+	it("用户名或邮箱为空时提示「请输入用户名或邮箱」", () => {
+		const result = signInSchema.safeParse({
+			identifier: "",
+			password: VALID_PASSWORD,
+		});
+		expect(result.success).toBe(false);
+		expect(result.error?.issues).toEqual([
+			expect.objectContaining({
+				message: AUTH_VALIDATION_MESSAGES.identifierRequired,
+				path: ["identifier"],
+			}),
+		]);
+	});
+
+	it("用户名或邮箱只有空格时视为空", () => {
+		const result = signInSchema.safeParse({
+			identifier: "   ",
+			password: VALID_PASSWORD,
+		});
+		expect(getMessages(result)).toEqual([
+			AUTH_VALIDATION_MESSAGES.identifierRequired,
+		]);
+	});
+
+	it("密码为空时提示「请输入密码」", () => {
+		const result = signInSchema.safeParse({ identifier: "tom", password: "" });
+		expect(result.success).toBe(false);
+		expect(result.error?.issues).toEqual([
+			expect.objectContaining({
+				message: AUTH_VALIDATION_MESSAGES.passwordRequired,
+				path: ["password"],
+			}),
+		]);
+	});
+
+	it("两项都为空时各自报错", () => {
+		const result = signInSchema.safeParse({ identifier: "", password: "" });
+		expect(getMessages(result)).toEqual([
+			AUTH_VALIDATION_MESSAGES.identifierRequired,
+			AUTH_VALIDATION_MESSAGES.passwordRequired,
+		]);
+	});
+
+	it("登录不校验用户名格式和密码长度，避免泄露规则差异", () => {
+		const result = signInSchema.safeParse({ identifier: "ab", password: "1" });
+		expect(result.success).toBe(true);
+	});
+
+	it("identifier 解析为 trim 后的值，密码不 trim", () => {
+		const result = signInSchema.safeParse({
+			identifier: "  Tom@Example.com  ",
+			password: " pass word ",
+		});
+		expect(result.data).toEqual({
+			identifier: "Tom@Example.com",
+			password: " pass word ",
+		});
 	});
 });

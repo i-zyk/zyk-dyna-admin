@@ -13,6 +13,7 @@ export const AUTH_VALIDATION_MESSAGES = {
 	confirmPasswordRequired: "请再次输入密码",
 	emailInvalid: "邮箱格式不正确",
 	emailRequired: "请输入邮箱",
+	identifierRequired: "请输入用户名或邮箱",
 	passwordLength: `密码需为 ${PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} 位`,
 	passwordRequired: "请输入密码",
 	usernameInvalid: "用户名只能包含字母、数字、下划线和点",
@@ -69,3 +70,20 @@ export const signUpSchema = z
 
 export type SignUpInput = z.input<typeof signUpSchema>;
 export type SignUpValues = z.output<typeof signUpSchema>;
+
+/**
+ * 登录只做必填校验：不在登录时校验用户名格式或密码长度，避免通过提示差异泄露规则。
+ * identifier 解析结果为 trim 后的值；密码不 trim。
+ */
+export const signInSchema = z.object({
+	identifier: z.string().trim().min(1, { error: messages.identifierRequired }),
+	password: z.string().min(1, { error: messages.passwordRequired }),
+});
+
+export type SignInInput = z.input<typeof signInSchema>;
+export type SignInValues = z.output<typeof signInSchema>;
+
+/** 登录标识包含 `@` 时按邮箱登录（signIn.email），否则按用户名登录（signIn.username） */
+export function isEmailIdentifier(identifier: string): boolean {
+	return identifier.includes("@");
+}

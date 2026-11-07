@@ -280,3 +280,4 @@ Most formatting and common issues are automatically fixed by Biome. Run `pnpm ex
 ## 经验与踩坑
 
 - [2026-11-06][R01] `prisma migrate dev` 是交互式命令，非交互环境（agent / CI）下会卡住；执行时用 `--name <迁移名>` 指定迁移名
+- [2026-11-06][R02] Server Component 里用 `authClient.getSession` 判断登录态时，必须通过 `fetchOptions.headers: await headers()` 转发请求头（带上 cookie），否则永远拿不到 session；不传 `throw` 只能把 HTTP 错误响应变成 `{ error }`，连接被拒、DNS 失败等网络异常仍会 reject，要按未登录处理就得再用 try / catch 捕获（`redirect` 靠抛异常跳转，要放在 try 之外）

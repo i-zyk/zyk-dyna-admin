@@ -56,3 +56,44 @@ export function getSignUpError(code: string | null | undefined): SignUpError {
 			: undefined;
 	return known ?? { field: undefined, message: SIGN_UP_FALLBACK_MESSAGE };
 }
+
+export const SIGN_IN_INVALID_CREDENTIALS_MESSAGE = "账号或密码错误";
+export const SIGN_IN_FALLBACK_MESSAGE = "登录失败，请稍后再试";
+
+/** 登录接口返回这些错误码时，统一提示「账号或密码错误」，不透露具体是哪一项错 */
+const SIGN_IN_CREDENTIAL_ERROR_CODES: ReadonlySet<string> = new Set([
+	"INVALID_EMAIL",
+	"INVALID_EMAIL_OR_PASSWORD",
+	"INVALID_USERNAME",
+	"INVALID_USERNAME_OR_PASSWORD",
+	"USERNAME_TOO_LONG",
+	"USERNAME_TOO_SHORT",
+]);
+
+/** 认证类错误对应的 HTTP 状态码：400 格式不合法、401 账号或密码错误、422 用户名长度 / 格式不合法 */
+const SIGN_IN_CREDENTIAL_ERROR_STATUSES: ReadonlySet<number> = new Set([
+	400, 401, 422,
+]);
+
+/** Better Auth 客户端返回的错误里登录映射用到的字段 */
+export interface SignInErrorLike {
+	code?: string | null;
+	status?: number | null;
+}
+
+/**
+ * 把登录失败映射成中文提示：认证类错误统一为「账号或密码错误」；
+ * 网络错误（没有 error 对象）、5xx 和其他错误显示「登录失败，请稍后再试」。两种文案都不透露账号是否存在。
+ */
+export function getSignInErrorMessage(
+	error: SignInErrorLike | null | undefined
+): string {
+	const isCredentialError =
+		(typeof error?.code === "string" &&
+			SIGN_IN_CREDENTIAL_ERROR_CODES.has(error.code)) ||
+		(typeof error?.status === "number" &&
+			SIGN_IN_CREDENTIAL_ERROR_STATUSES.has(error.status));
+	return isCredentialError
+		? SIGN_IN_INVALID_CREDENTIALS_MESSAGE
+		: SIGN_IN_FALLBACK_MESSAGE;
+}
