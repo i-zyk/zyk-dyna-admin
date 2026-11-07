@@ -19,6 +19,10 @@ function makeQueryClient() {
 	return new QueryClient({
 		queryCache: new QueryCache({
 			onError: (error, query) => {
+				// 页面内自行展示错误的查询通过 meta.skipGlobalErrorToast 跳过全局 toast，避免重复提示
+				if (query.meta?.skipGlobalErrorToast === true) {
+					return;
+				}
 				toast.error(error.message, {
 					action: {
 						label: "retry",

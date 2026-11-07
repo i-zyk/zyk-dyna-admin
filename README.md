@@ -2,7 +2,17 @@
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Hono, TRPC, and more.
 
-## Features
+## Product Features
+
+- **Sign up** with username + email + password on `/login` (username and email are case-insensitive and unique; you are signed in and sent to `/dashboard` on success)
+- **Sign in** with either username or email + password, and **sign out** from the header user menu
+- **Protected dashboard**: visiting `/dashboard` while signed out redirects to `/login`; visiting `/login` while signed in redirects to `/dashboard`
+- **GitHub user lookup** on `/dashboard`: enter a GitHub username to see the public profile (avatar, name, bio, company, location, blog, followers / following, public repos), with clear messages for invalid usernames, users not found, rate limits and upstream errors
+
+Requirements and acceptance criteria live in [`docs/需求.md`](docs/需求.md) and [`specs/`](specs/README.md).
+
+## Tech Stack
+
 
 - **TypeScript** - For type safety and improved developer experience
 - **Next.js** - Full-stack React framework
@@ -47,10 +57,12 @@ This project uses PostgreSQL with Prisma.
 
    Everything else (server / web / native URLs) defaults to localhost in each app's `.env.schema`; override it in that app's `.env` only when needed.
 
-3. Apply the schema to your database:
+   Optionally set `GITHUB_TOKEN` in `apps/server/.env` to raise the GitHub API rate limit for the user lookup from 60 to 5000 requests per hour. Without it the server calls GitHub anonymously.
+
+3. Apply the migrations in `packages/db/prisma/migrations` to your database:
 
 ```bash
-pnpm run db:push
+pnpm run db:migrate
 ```
 
 Then, run the development server:
@@ -99,6 +111,15 @@ Bun's automatic env loading is disabled in `bunfig.toml`; the framework integrat
 
 Run standalone Node/Bun tools that use Varlock from the owning app directory so they load that app's schema and env files. `env:generate` only generates TypeScript files; it does not initialize environment values in a subsequent command.
 
+## Testing
+
+- `pnpm run test`: Vitest unit / integration tests (`*.test.ts` in `apps/web` and `packages/api`)
+- `pnpm run test:e2e`: Playwright end-to-end tests in `apps/web/e2e`. Playwright starts the server (:3000) and web app (:3001) itself, so stop any running dev servers first.
+  - E2E uses a separate PostgreSQL database named `zyk_dyna_admin_test`: the connection string is your `DATABASE_URL` with only the database name replaced. It is migrated and **all business tables are emptied** before each run, so never point it at data you want to keep.
+  - Install the browser once before the first run: `pnpm --dir apps/web exec playwright install chromium`
+  - GitHub API calls are mocked in E2E; no real GitHub requests are made.
+- `pnpm --dir packages/api run test:smoke`: optional smoke test against the real GitHub API (`*.smoke.ts`, run manually; not part of `pnpm run test`)
+
 ## Git Hooks and Formatting
 
 - Run checks: `pnpm run check`
@@ -131,6 +152,9 @@ zyk-dyna-admin/
 - `pnpm run db:migrate`: Run database migrations
 - `pnpm run db:studio`: Open database studio UI
 - `pnpm run check`: Run Biome formatting and linting
+- `pnpm run fix`: Auto-fix Biome formatting and lint issues
+- `pnpm run test`: Run unit / integration tests (Vitest)
+- `pnpm run test:e2e`: Run Web end-to-end tests (Playwright)
 
 ## Better Auth Schema Generation
 

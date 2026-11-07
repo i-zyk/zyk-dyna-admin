@@ -1,17 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import GithubUserSearch from "@/components/github-user-search";
 
-import type { authClient } from "@/lib/auth-client";
-import { useTRPC } from "@/utils/trpc";
-
-export default function Dashboard({
-	session: _session,
-}: {
-	session: typeof authClient.$Infer.Session;
-}) {
-	const trpc = useTRPC();
-	const privateData = useQuery(trpc.privateData.queryOptions());
-
-	return <p>API: {privateData.data?.message}</p>;
+/** /dashboard 的客户端内容：GitHub 用户查询（替换原来的 privateData 示例展示） */
+export default function Dashboard() {
+	return <GithubUserSearch />;
 }

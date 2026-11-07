@@ -1,0 +1,59 @@
+# R03 GitHub 用户查询 - 任务清单
+
+> 完成一项后把 `- [ ]` 改为 `- [✅]`
+
+- [✅] 1. 声明 `GITHUB_TOKEN` 环境变量
+  - 说明：`apps/server/.env.schema` 增加 `# @optional` 的 `GITHUB_TOKEN=`（继承 `@defaultSensitive=true`，不写默认值）；执行 `pnpm run env:generate`；`turbo.json` 的 `globalEnv` 加入 `GITHUB_TOKEN`；确认不配置时 `pnpm run dev:server` 能正常启动
+  - 对应验收标准：R03-AC14
+  - 测试：`cd apps/server && npx varlock load`（GITHUB_TOKEN 可选、敏感、未配置为 undefined）+ `pnpm run check` + `pnpm exec turbo run check-types -F server --force` + `pnpm run test --force` + 未配置 GITHUB_TOKEN 时 `pnpm run dev:server` 启动并 `curl http://localhost:3000/` 返回 200，通过（第 1 轮）
+- [✅] 2. GitHub 客户端工厂
+  - [✅] 2.1 新建 `packages/api/src/lib/github-username.ts`：`GITHUB_USERNAME_PATTERN`、`githubUsernameSchema`
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 2 个 + tsc 通过）+ `pnpm run check` + 临时脚本 `node --experimental-strip-types` 校验 `githubUsernameSchema`（torvalds、 Torvalds 、a-b、39 位通过；-abc、abc-、a--b、40 位、a_b、空串拒绝），通过（第 1 轮）
+  - [✅] 2.2 新建 `packages/api/src/lib/github.ts`：`createGithubClient(config, fetchImpl)`，设置 `Accept`、`User-Agent`、可选 `Authorization: Bearer`、10 秒超时；用 Zod 解析响应并只挑出 `GithubUserProfile` 字段（空字符串转 `null`）；按状态码抛 `GithubApiError`
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force` + `pnpm run check` + 临时脚本 `node --experimental-strip-types` 注入假 fetch 校验 `createGithubClient`（200 只返回 GithubUserProfile 字段、空串转 null；Accept / User-Agent / X-GitHub-Api-Version 头、超时 signal；无 Token 无 Authorization、有 Token 为 Bearer；404→not_found、403/429→rate_limited、500/网络异常/结构不对/非 JSON→upstream），通过（第 1 轮）
+  - 对应验收标准：R03-AC10、R03-AC11、R03-AC13、R03-AC14
+- [✅] 3. 注入 Context 并新增 tRPC 子路由
+  - [✅] 3.1 `packages/api/src/context.ts` 的 `Context`（保持 `type`）增加 `github: GithubClient`；`apps/server/src/services.ts` 创建 `github`；`apps/server/src/context.ts` 注入
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api -F server -F web --force`（api 单测 2 个、web 单测 75 个 + 8 个包 tsc 通过）+ `pnpm run check` + 未配置 GITHUB_TOKEN 时 `pnpm run dev`（apps/server）启动，`curl /` 返回 200、`/trpc/healthCheck` 返回 OK、`/trpc/privateData` 未登录返回 401，通过（第 1 轮）
+  - [✅] 3.2 新建 `packages/api/src/routers/github.ts`：`getUser` 用 `protectedProcedure` + `githubUsernameSchema`，把 `GithubApiError` 映射为 `NOT_FOUND` / `TOO_MANY_REQUESTS` / `INTERNAL_SERVER_ERROR`；在 `routers/index.ts` 合并为 `github`
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api -F server -F web --force`（api 单测 2 个、web 单测 75 个 + 8 个包 tsc 通过）+ `pnpm run check` + 临时 vitest 用例 `createCaller` 注入假 GithubClient 校验 `github.getUser`（未登录 UNAUTHORIZED；-abc、abc-、a--b、40 位、a_b、空串 BAD_REQUEST 且不调用 GitHub；合法输入 trim 后透传并返回资料；not_found / rate_limited / upstream 映射为 NOT_FOUND / TOO_MANY_REQUESTS / INTERNAL_SERVER_ERROR 且不回显原始错误信息；其他异常为 INTERNAL_SERVER_ERROR），通过（第 1 轮）
+  - 对应验收标准：R03-AC9、R03-AC10、R03-AC11、R03-AC13
+- [✅] 4. 添加 Avatar 组件并支持跳过全局错误 toast
+  - [✅] 4.1 执行 `npx shadcn@latest add avatar -c packages/ui`，核对没有新增 npm 依赖（有的话先暂停确认）
+    - 测试：`git diff HEAD -- package.json pnpm-lock.yaml packages/ui/package.json apps/web/package.json` 无改动（未新增依赖，复用已有 `@base-ui/react/avatar`）+ `pnpm exec turbo run check-types -F @zyk-dyna-admin/ui -F web --force`（5 个包 tsc 通过）+ `pnpm run check` + `pnpm run test --force`（api 单测 2 个、web 单测 75 个）+ 临时 vitest 用例 `renderToStaticMarkup` 渲染 `Avatar size="lg"` + `AvatarImage` + `AvatarFallback`（含 data-slot="avatar"、data-size="lg"、回退文字），通过（第 1 轮）
+  - [✅] 4.2 `apps/web/src/utils/trpc.ts` 的 `QueryCache.onError` 在 `query.meta?.skipGlobalErrorToast` 为 true 时不弹 toast
+    - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + 临时 vitest 用例 mock `sonner` 后用 `getQueryClient().fetchQuery` 触发失败查询（无 meta 弹 toast；`meta.skipGlobalErrorToast: true` 不弹；非 true 值仍弹），通过（第 1 轮）
+  - 对应验收标准：R03-AC5、R03-AC9 ~ R03-AC11
+- [✅] 5. 前端工具函数
+  - 说明：新建 `apps/web/src/lib/github-username.ts`（与后端同一正则、`parseGithubUsernameInput()` 返回 空 / 不合法 / 小写用户名）和 `apps/web/src/lib/github-profile-format.ts`（`formatJoinedDate()`、`normalizeBlogUrl()`）
+  - 对应验收标准：R03-AC2、R03-AC3、R03-AC7、R03-AC8、R03-AC12
+  - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + 临时 vitest 用例校验 `parseGithubUsernameInput`（空串 / 空格→empty；-abc、abc-、a--b、40 位、a_b→invalid；` Torvalds `→torvalds；39 位 valid）、前后端正则 source 一致且对同组用例结果一致、`formatJoinedDate`（`2011-09-03T15:26:22Z`→`2011-09-03`，非法→null）、`normalizeBlogUrl`（`""`→null、`example.com`→`https://example.com/`、`https://a.dev`→`https://a.dev/`、`javascript:` / `data:` / `mailto:` / `ftp:`→null、`localhost:8080` 和 `//example.com` 补 https），通过（第 1 轮）
+- [✅] 6. 搜索组件与资料卡片
+  - [✅] 6.1 新建 `apps/web/src/components/github-user-search.tsx`：带 `<Label>` 的搜索框 + 「搜索」按钮（`<form>` 提交，回车可用）；空输入忽略；格式不合法提示「GitHub 用户名格式不正确」；`useQuery(trpc.github.getUser.queryOptions(...))`，`enabled`、`staleTime: 5 分钟`、`retry: false`、`meta.skipGlobalErrorToast`；按 `error.data?.code` 显示中文错误；加载中显示骨架屏并禁用按钮
+    - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + 临时页面挂载 `GithubUserSearch`、临时 Playwright 用例（只起 web，`page.route` 模拟 `/trpc/github.getUser`）校验：空输入 / 空格不发请求不提示；`-abc`、40 位、`a_b`、`a--b` 提示「GitHub 用户名格式不正确」、`aria-invalid` 且不发请求，并清掉上次结果；` Torvalds ` 回车提交，加载中显示骨架屏、按钮「搜索中…」禁用，结果按小写 `torvalds` 请求；404 / 429 / 500 显示对应中文文案，不回显原始错误信息、不弹全局 toast；失败后再搜同名重新请求且只发 1 次（`retry: false`）；`TORVALDS` 命中缓存不再请求，通过（第 1 轮）
+  - [✅] 6.2 新建 `apps/web/src/components/github-user-card.tsx`：`Card` + `Avatar`，昵称为空显示 `login`，空字段整行不渲染，`login` 链接到 `htmlUrl`、博客链接用 `normalizeBlogUrl`，外链统一 `target="_blank" rel="noopener noreferrer"`，注册时间用 `formatJoinedDate`；长文本 `break-words` 不撑出横向滚动；同文件导出骨架屏组件
+    - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + 临时 vitest 用例 `renderToStaticMarkup` 渲染 `GithubUserCard` / `GithubUserCardSkeleton`（完整资料显示昵称、简介、公司、所在地、博客、`注册于 2011-09-03`、仓库 / 粉丝 / 关注数，`login` 链接到 `htmlUrl`、`example.com` 博客链接为 `https://example.com/`，2 个外链均为 `target="_blank" rel="noopener noreferrer"`；昵称为空显示 `login`，空字段和无效注册时间整行不渲染且不含 `null` / `undefined`；`javascript:` 博客只显示文本不渲染链接；骨架屏 `role="status"` `aria-busy`）+ 临时页面挂载超长文本卡片、临时 Playwright 用例（只起 web）在 375px 宽 light / dark 下 `scrollWidth ≤ 375` 无横向滚动，通过（第 2 轮）
+  - [✅] 6.3 `apps/web/src/app/dashboard/page.tsx` / `dashboard.tsx` 保留服务端 session 校验，渲染 `GithubUserSearch`（替换 `privateData` 示例展示）
+    - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + `pnpm run test:e2e --force`（Playwright 29 个用例通过，连测试库 zyk_dyna_admin_test）+ 临时 Playwright 用例（`page.route` 模拟 `/trpc/github.getUser`）校验：登录后 /dashboard 显示「Dashboard」标题、`Welcome Tom` 和「GitHub 用户查询」，不再请求 `privateData`、无「API:」文本；` Torvalds ` 回车搜索只发 1 次请求并显示资料卡片，页面不含 `null` / `undefined`；375px 宽无横向滚动；清 cookie 后访问 /dashboard 被重定向到 /login，通过（第 1 轮）
+  - 对应验收标准：R03-AC1 ~ R03-AC12、R03-AC15
+- [✅] 7. 编写测试
+  - [✅] 7.1 `packages/api` 单元测试 `github.test.ts`（注入假 `fetch`）：200 时只返回 `GithubUserProfile` 字段（多余字段被丢弃，`blog: ""` 转 `null`）；404 → `not_found`；403、429 → `rate_limited`；500、网络异常、超时、响应结构不对 → `upstream`；未配置 Token 时没有 `Authorization` 头，配置后为 `Bearer <token>`；`Accept`、`User-Agent` 头正确
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 19 个通过：`github.test.ts` 17 个 + `routers/index.test.ts` 2 个；db / auth / api tsc 通过）+ `pnpm run check`（148 个文件无问题），通过（第 1 轮）
+  - [✅] 7.2 `packages/api` 路由测试 `routers/github.test.ts`（`createCaller`，注入假 `GithubClient`）：`session: null` 时抛 `UNAUTHORIZED`；`-abc`、`abc-`、`a--b`、40 位字符串抛 `BAD_REQUEST`；`not_found` / `rate_limited` / `upstream` 分别映射为 `NOT_FOUND` / `TOO_MANY_REQUESTS` / `INTERNAL_SERVER_ERROR`
+    - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 32 个通过：`routers/github.test.ts` 13 个 + `lib/github.test.ts` 17 个 + `routers/index.test.ts` 2 个；db / auth / api tsc 通过）+ `pnpm run check`（149 个文件无问题），通过（第 1 轮）
+  - [✅] 7.3 `apps/web` 单元测试：`parseGithubUsernameInput` 对空串和空格返回空，对 `-abc`、40 位、`a_b` 返回不合法，对 `Torvalds` 返回 `torvalds`，前后端正则对同一组用例结果一致；`formatJoinedDate("2011-09-03T15:26:22Z")` 为 `2011-09-03`；`normalizeBlogUrl` 对 `""`、`example.com`、`https://a.dev`、`javascript:alert(1)` 的结果
+    - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 129 个通过：`github-username.test.ts` 37 个 + `github-profile-format.test.ts` 17 个 + `auth-errors` 37 个 + `auth-validation` 38 个；6 个任务 tsc 通过）+ `pnpm run check`（151 个文件无问题），通过（第 1 轮）
+  - [✅] 7.4 E2E `apps/web/e2e/github-search.spec.ts`（先登录；用 Playwright 拦截并计数 `/trpc/github.getUser` 请求，在 server 端用可控的假 GitHub 响应或 `page.route` 模拟 tRPC 响应，避免依赖真实 GitHub 额度）：空输入和 `-abc`、40 位字符串不发请求且显示格式错误；`torvalds` 显示头像、昵称、仓库数、粉丝数、关注数、注册时间；缺少 `bio` 等字段时对应行不存在且页面文本不含 `null` / `undefined`；外链带 `target="_blank"` 和 `rel="noopener noreferrer"`；404 / 429 / 500 分别显示对应文案且页面不崩溃；同一用户名 5 分钟内搜索两次（中间搜索另一个用户）只发出一次请求，先搜 `Torvalds` 再搜 `torvalds` 也只发出一次请求；回车可搜索；375px 视口下长简介不出现横向滚动
+    - 测试：`pnpm --dir apps/web run test`（web 单测 129 个通过）+ `pnpm --dir apps/web run test:e2e`（Playwright 44 个用例通过：`github-search.spec.ts` 15 个 + sign-in 16 个 + sign-up 11 个 + smoke 2 个，连测试库 zyk_dyna_admin_test，`page.route` 模拟 `/trpc/github.getUser` 与头像，不访问真实 GitHub）+ `pnpm run check`（152 个文件无问题）+ `pnpm run check-types`（7 个包 tsc 通过），通过（第 1 轮）
+  - [✅] 7.5 真实 GitHub 冒烟（手动或标记为可选用例）：未配置 `GITHUB_TOKEN` 时搜索 `torvalds` 成功
+    - 测试：`env -u GITHUB_TOKEN pnpm --dir packages/api run test:smoke`（真实 GitHub 冒烟 1 个通过：`lib/github.smoke.ts` 不带 Token 经 `appRouter.createCaller` 查到 `torvalds`）+ `pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 32 个通过，smoke 不进入默认测试；db / auth / api tsc 通过）+ `pnpm run check`（154 个文件无问题），通过（第 1 轮）
+  - 对应验收标准：R03-AC1 ~ R03-AC15
+- [✅] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+  - 对应验收标准：R03-AC16
+  - 测试：`pnpm run check`（ultracite/Biome 154 个文件无问题）+ `pnpm run check-types --force`（7 个包 tsc --noEmit 通过）+ `pnpm run test --force`（api 单测 32 个、web 单测 129 个通过），通过（第 1 轮）
+- [✅] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 对应验收标准：R03-AC1 ~ R03-AC16
+  - 测试：`pnpm run test --force`（api 单测 32 个、web 单测 129 个通过）+ `pnpm run test:e2e --force`（Playwright 44 个用例通过：github-search 15 + sign-in 16 + sign-up 11 + smoke 2，连测试库 zyk_dyna_admin_test）+ `env -u GITHUB_TOKEN pnpm --dir packages/api run test:smoke`（真实 GitHub 冒烟 1 个通过）+ `pnpm run check`（154 个文件无问题）+ `pnpm run check-types --force`（7 个包 tsc 通过）+ 临时 Playwright 用例（`page.route` 模拟 `/trpc/github.getUser`）在 light / dark 下截图人工核对 /dashboard：资料卡片、404 文案、格式错误提示、375px 宽缺字段卡片均显示正常、文字对比清晰、无 `null` / `undefined`，通过（第 1 轮）
+- CR（2026-11-06）：Codex 提出 1 条，采纳 1 条；不采纳：无
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无

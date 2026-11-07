@@ -23,6 +23,13 @@
       "persistent": true,
       "passThroughEnv": ["*"]
     },
+    "test": {
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "passThroughEnv": ["PLAYWRIGHT_*"]
+    },
     "db:push": {
       "cache": false,
       "interactive": true
@@ -47,6 +54,7 @@
     "CORS_ORIGIN",
     "DATABASE_URL",
     "EXPO_PUBLIC_SERVER_URL",
+    "GITHUB_TOKEN",
     "NEXT_PUBLIC_SERVER_URL",
     "NODE_ENV",
     "VERCEL",

@@ -7,7 +7,9 @@
     "check-types": "tsc --noEmit",
     "dev": "next dev --port 3001",
     "env:generate": "varlock codegen",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@swc/helpers": "^0.5.23",
@@ -31,13 +33,17 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
     "@tailwindcss/postcss": "catalog:",
     "@tanstack/react-query-devtools": "^5.104.2",
     "@types/node": "catalog:",
+    "@types/pg": "catalog:",
     "@types/react": "^19.2.18",
     "@types/react-dom": "catalog:",
     "@zyk-dyna-admin/config": "workspace:*",
+    "pg": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "catalog:"
   }
 }

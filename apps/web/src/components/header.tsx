@@ -11,8 +11,9 @@ export default function Header() {
 	] as const;
 
 	return (
-		<div>
-			<div className="flex flex-row items-center justify-between px-2 py-1">
+		// min-w-0：不让导航栏的最小内容宽度撑宽根布局的 grid 列，窄屏下由用户菜单按钮截断名字
+		<div className="min-w-0">
+			<div className="flex flex-row items-center justify-between gap-2 px-2 py-1">
 				<nav className="flex gap-4 text-lg">
 					{links.map(({ to, label }) => (
 						<Link href={to} key={to}>
@@ -20,7 +21,7 @@ export default function Header() {
 						</Link>
 					))}
 				</nav>
-				<div className="flex items-center gap-2">
+				<div className="flex min-w-0 items-center gap-2">
 					<ModeToggle />
 					<UserMenu />
 				</div>
