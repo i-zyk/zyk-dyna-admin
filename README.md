@@ -38,7 +38,14 @@ pnpm run db:generate
 This project uses PostgreSQL with Prisma.
 
 1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
+2. Create `apps/server/.env` with the two values that have no default:
+
+   ```bash
+   DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DB_NAME
+   BETTER_AUTH_SECRET=   # generate with: openssl rand -base64 32
+   ```
+
+   Everything else (server / web / native URLs) defaults to localhost in each app's `.env.schema`; override it in that app's `.env` only when needed.
 
 3. Apply the schema to your database:
 
@@ -84,7 +91,7 @@ If you want to add app-specific blocks instead of shared primitives, run the sha
 
 ## Environment Configuration
 
-Each app owns its environment schema in `.env.schema`. Varlock generates `src/env.ts` during installation; run `pnpm run env:generate` after changing a schema. Commit schemas, and keep secrets in ignored env files or your deployment platform.
+Each app owns its environment schema in `.env.schema`. Varlock generates `src/env.ts` during installation; run `pnpm run env:generate` after changing a schema. Commit schemas, and keep secrets in ignored env files or your deployment platform. Schemas carry localhost defaults for non-secret URLs, so locally only `DATABASE_URL` and `BETTER_AUTH_SECRET` need to be set.
 
 Import the generated `ENV` accessor in application code. Shared database and auth packages receive configuration or initialized clients from the application. See [Varlock's monorepo guide](https://varlock.dev/guides/monorepos/).
 

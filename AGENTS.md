@@ -112,7 +112,7 @@ apps/web ──> @zyk-dyna-admin/ui
 
 ### 环境变量（Varlock）
 
-- 每个应用一个 `.env.schema`（已提交），实际值放 `.env`（已 gitignore）。
+- 每个应用一个 `.env.schema`（已提交），实际值放 `.env`（已 gitignore）。schema 里给不敏感的 URL 写了 localhost 默认值，本地只需在 `apps/server/.env` 填 `DATABASE_URL` 和 `BETTER_AUTH_SECRET`；密钥类变量不要写默认值。
 - `packages/db/.env.schema` 通过 `@import` 复用 `apps/server` 的 `DATABASE_*`。
 - `src/env.ts` 是 **自动生成** 的，修改 schema 后执行 `pnpm run env:generate`，不要手改。
 - 应用代码用生成的 `ENV` 读取变量；server 入口须先 `import "./env.server"`（内含 `varlock/auto-load`）。
