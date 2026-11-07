@@ -18,17 +18,21 @@
   - 说明：`apps/web/src/components/user-menu.tsx` 显示用户名（`displayUsername ?? username ?? name`，已确认）和邮箱，提供「退出登录」，成功后 `router.push("/login")` + `router.refresh()`；未登录显示「登录」按钮；检查亮暗主题与 375px 宽度下顶部导航无横向滚动
   - 对应验收标准：R02-AC7、R02-AC8、R02-AC9
   - 测试：`pnpm --filter web run test`（vitest 73 个通过）、`pnpm --filter web run check-types`、`pnpm run check`、`pnpm --filter web run test:e2e`（Playwright 13 个通过），另用临时 Playwright 用例实际打开页面验证（未登录显示「登录」并可进入 /login；`Tom` 登录后菜单按钮显示 `Tom`、菜单内显示 `Tom` 和 `tom@example.com`；点击 / 键盘 Enter 选「退出登录」回到 /login，之后访问 /dashboard 与后退均停在 /login；退出接口 500 时提示「退出登录失败，请稍后再试」并保持登录；375px 亮 / 暗主题下 30 位用户名截断显示、菜单展开时 `scrollWidth <= 375`，6 个通过，用例已删除），通过（第 1 轮）
-- [ ] 5. 编写测试
+- [✅] 5. 编写测试
   - [✅] 5.1 单元测试：`isEmailIdentifier("a@b.co")` 为 true、`isEmailIdentifier("tom")` 为 false；`signInSchema` 空用户名 / 空密码报错；`getSignInErrorMessage` 对 `INVALID_EMAIL_OR_PASSWORD`、`INVALID_USERNAME_OR_PASSWORD`、`INVALID_EMAIL`、`USERNAME_TOO_SHORT`、status 401 / 422 都返回「账号或密码错误」，对 status 500 和网络错误返回「登录失败，请稍后再试」
     - 测试：`pnpm --filter web run test`（vitest 75 个通过）、`pnpm --filter web run check-types`、`pnpm run check`，通过（第 1 轮）
   - [✅] 5.2 E2E `apps/web/e2e/sign-in.spec.ts`（测试前通过注册接口准备用户 `Tom` / `tom@example.com`）：用 `TOM` + 密码登录成功进入 `/dashboard`；用 `TOM@EXAMPLE.COM` + 密码登录成功；错误密码、不存在的用户名、不存在的邮箱、`ab` 都显示同一句「账号或密码错误」；空字段时无法提交
     - 测试：`pnpm --filter web run test`（vitest 75 个通过）、`pnpm --filter web run check-types`、`pnpm run check`、`pnpm --filter web run test:e2e`（Playwright 20 个通过，其中 sign-in 7 个），通过（第 1 轮）
   - [✅] 5.3 E2E 跳转：已登录访问 `/login` 被重定向到 `/dashboard`；用户菜单显示 `Tom` 和 `tom@example.com`；点击「退出登录」回到 `/login`；之后访问 `/dashboard` 被重定向到 `/login`；未登录直接访问 `/dashboard` 被重定向到 `/login`
     - 测试：`pnpm --filter web run test`（vitest 75 个通过）、`pnpm --filter web run check-types`、`pnpm run check`、`pnpm --filter web run test:e2e`（Playwright 23 个通过，其中 sign-in 10 个，含 5.3 新增的 3 个跳转用例），通过（第 1 轮）
-  - [ ] 5.4 E2E 可访问性与布局：只用键盘（Tab / Enter）完成登录，并通过键盘打开用户菜单完成退出；375px 视口下 `/login` 的 `scrollWidth <= 375`
+  - [✅] 5.4 E2E 可访问性与布局：只用键盘（Tab / Enter）完成登录，并通过键盘打开用户菜单完成退出；375px 视口下 `/login` 的 `scrollWidth <= 375`
+    - 测试：`pnpm --filter web run test`（vitest 75 个通过）、`pnpm run check-types`、`pnpm run check`、`pnpm --filter web run test:e2e`（Playwright 26 个通过，其中 sign-in 13 个，含 5.4 新增的键盘登录/退出 1 个和 375px 亮/暗主题无横向滚动 2 个），通过（第 1 轮）
   - 对应验收标准：R02-AC1 ~ R02-AC9
-- [ ] 6. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+- [✅] 6. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R02-AC10
-- [ ] 7. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 测试：`pnpm run check`（ultracite/Biome 138 个文件无问题）、`pnpm run check-types --force`（7 个包 tsc --noEmit 通过）、`pnpm run test --force`（api 2 个、web 75 个通过）、`pnpm run test:e2e --force`（Playwright 26 个通过），通过（第 1 轮）
+- [✅] 7. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R02-AC1 ~ R02-AC10
+  - 测试：`pnpm --filter web run test`（vitest 75 个通过）、`pnpm run check`（ultracite/Biome 138 个文件无问题）、`pnpm run check-types --force`（7 个包 tsc --noEmit 通过）、`pnpm run test:e2e --force`（Playwright 29 个通过：sign-in 16 个（含 375px 亮 / 暗主题下 /login 与顶部导航用户菜单无横向滚动 4 个）、sign-up 11 个、smoke 2 个），通过（第 1 轮）
 - CR（2026-11-06）：Codex 提出 1 条，采纳 1 条；不采纳：无
+- CR（2026-11-06）：Codex 提出 0 条，采纳 0 条；不采纳：无

@@ -35,6 +35,7 @@
 | `apps/web/src/components/header.tsx` | 布局微调（`min-w-0`、`gap-2`），窄屏下由用户菜单按钮截断名字，不出现横向滚动 |
 | `apps/web/src/app/dashboard/page.tsx` | 保持未登录重定向，不改逻辑 |
 | `apps/web/src/lib/auth-validation.test.ts`、`apps/web/src/lib/auth-errors.test.ts`、`apps/web/e2e/sign-in.spec.ts` | 测试 |
+| `apps/web/e2e/support/page-helpers.ts`（新建） | 从 `sign-up.spec.ts` 抽出的 E2E 工具（`NARROW_VIEWPORT`、`tabUntilFocused`、`pressUntilFocused`、`getScrollWidth`），登录 / 注册 E2E 共用 |
 
 ## 数据模型
 

@@ -9,14 +9,17 @@ import {
 } from "@playwright/test";
 
 import { resetTestDatabase, withTestDatabase } from "./support/database";
+import {
+	getScrollWidth,
+	NARROW_VIEWPORT,
+	tabUntilFocused,
+} from "./support/page-helpers";
 import { SERVER_LOG_FILE } from "./support/paths";
 import { SERVER_URL, WEB_URL } from "./support/urls";
 
 const SIGN_UP_PATH = "/api/auth/sign-up/email";
 /** 所有用例共用的明文密码，最后检查 server 日志里不出现它 */
 const PASSWORD = "E2e-Plain-Secret-7f3k";
-const NARROW_VIEWPORT = { height: 812, width: 375 };
-const MAX_TAB_PRESSES = 40;
 const DASHBOARD_URL = /\/dashboard$/;
 const LOGIN_URL = /\/login$/;
 
@@ -88,25 +91,6 @@ async function signUpViaApi(
 		headers: { origin: WEB_URL },
 	});
 	expect(response.ok()).toBe(true);
-}
-
-/** 不断按 Tab，直到焦点落到目标元素上 */
-async function tabUntilFocused(page: Page, target: Locator): Promise<void> {
-	for (let presses = 0; presses < MAX_TAB_PRESSES; presses += 1) {
-		// biome-ignore lint/performance/noAwaitInLoops: 每次按键都依赖上一次按键后的焦点位置，必须按顺序执行
-		const isFocused = await target.evaluate(
-			(element) => element === document.activeElement
-		);
-		if (isFocused) {
-			return;
-		}
-		await page.keyboard.press("Tab");
-	}
-	await expect(target).toBeFocused();
-}
-
-async function getScrollWidth(page: Page): Promise<number> {
-	return await page.evaluate(() => document.documentElement.scrollWidth);
 }
 
 test.beforeEach(async () => {
