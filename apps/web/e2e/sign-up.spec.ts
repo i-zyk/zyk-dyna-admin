@@ -215,6 +215,37 @@ test("注册成功后进入 /dashboard，刷新后仍保持登录", async ({ pag
 	await expect(page.getByText("Welcome tom")).toBeVisible();
 });
 
+test("注册请求进行中时按钮显示加载并禁用，不能重复提交", async ({ page }) => {
+	const requests = trackSignUpRequests(page);
+	// 先挂起注册请求，等断言完加载状态再放行
+	let releaseSignUp: () => void = () => undefined;
+	const signUpReleased = new Promise<void>((resolve) => {
+		releaseSignUp = resolve;
+	});
+	await page.route(`${SERVER_URL}${SIGN_UP_PATH}`, async (route) => {
+		await signUpReleased;
+		await route.continue();
+	});
+
+	const form = await openSignUp(page);
+	await fillSignUp(page, validValues());
+	await form.submit.click();
+
+	const busyButton = page.getByRole("button", { name: "注册中…" });
+	await expect(busyButton).toBeDisabled();
+	await expect(busyButton).toHaveAttribute("aria-busy", "true");
+	await expect.poll(() => requests.length).toBe(1);
+
+	// 加载中再次点击和回车都不应发出第二次请求
+	await busyButton.click({ force: true });
+	await form.confirmPassword.press("Enter");
+	expect(requests).toHaveLength(1);
+
+	releaseSignUp();
+	await expect(page).toHaveURL(DASHBOARD_URL);
+	expect(requests).toHaveLength(1);
+});
+
 test("只用键盘（Tab / Enter）完成注册", async ({ page }) => {
 	await page.goto("/login");
 	const switchToSignUp = page.getByRole("button", {

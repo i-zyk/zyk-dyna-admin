@@ -34,9 +34,12 @@
   - [✅] 6.4 数据校验：E2E 注册 `Tom.Lee` 后查询数据库，`username = "tom.lee"`、`displayUsername = "Tom.Lee"`、`name = "Tom.Lee"`，`account.password` 不等于明文；检查 server 日志输出中不含明文密码
   - 对应验收标准：R01-AC1 ~ R01-AC10
   - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（web 单测 37 个、E2E 12 个全部通过），通过（第 1 轮）
-- [ ] 7. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+- [✅] 7. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R01-AC11
-- [ ] 8. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 测试：pnpm run check && pnpm run check-types --force && pnpm run test --force && pnpm run test:e2e --force（Biome 134 个文件无问题、7 个包 tsc 通过、api 单测 2 个 + web 单测 37 个、E2E 12 个全部通过），通过（第 1 轮）
+- [✅] 8. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R01-AC1 ~ R01-AC11
+  - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（web 单测 37 个、E2E 13 个（sign-up 11 个，含新增的注册加载中防重复提交用例，以及 375px 亮 / 暗主题检查；smoke 2 个）全部通过，Biome 134 个文件无问题，7 个包 tsc 通过），通过（第 1 轮）
 - CR（2026-11-06）：Codex 提出 1 条，采纳 1 条；不采纳：无
+- CR（2026-11-06）：Codex 提出 0 条，采纳 0 条；不采纳：无
 - CR（2026-11-06）：Codex 提出 0 条，采纳 0 条；不采纳：无
