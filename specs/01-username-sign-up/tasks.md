@@ -6,31 +6,37 @@
   - 说明：在 `pnpm-workspace.yaml` 的 `catalog:` 中加入测试依赖；`apps/web`、`packages/api` 增加 `test` 脚本和 `vitest.config.ts`；`apps/web` 增加 `playwright.config.ts`（`webServer` 启动 server :3000 与 web :3001）和 `e2e/` 目录；`turbo.json` 增加 `test`、`test:e2e` 任务，根 `package.json` 增加对应脚本；E2E 使用测试库 `zyk_dyna_admin_test`：在 Playwright 配置 / global setup 中由 `DATABASE_URL` 只替换库名得到测试库连接串（不读取、不打印密码），通过环境变量传给 server 的 `webServer` 和数据库校验代码，测试前执行 `prisma migrate deploy` 并清空业务表；核对 varlock 允许进程环境变量覆盖 `.env` 中的 `DATABASE_URL`；写一个冒烟用例确认能跑通。
   - 对应验收标准：R01-AC11
   - 测试：pnpm run test && pnpm run test:e2e && pnpm run check && pnpm run check-types，通过（第 1 轮）
-- [ ] 2. 服务端启用 username 插件并更新数据库
-  - [ ] 2.1 `packages/auth/src/index.ts` 的 `plugins` 加入 `username()`（默认配置），保持 `emailAndPassword: { enabled: true }`
-  - [ ] 2.2 执行 `pnpm run auth:generate` 重新生成 `packages/db/prisma/schema/auth.prisma`，核对只新增 `username`、`displayUsername`
-  - [ ] 2.3 执行 `pnpm run db:generate`、`pnpm run db:migrate`，生成第一份迁移并提交（本地开发库为空库，Prisma 要求时可以重置；`prisma migrate dev` 是交互式命令，非交互环境下用 `--name` 指定迁移名）
+- [✅] 2. 服务端启用 username 插件并更新数据库
+  - [✅] 2.1 `packages/auth/src/index.ts` 的 `plugins` 加入 `username()`（默认配置），保持 `emailAndPassword: { enabled: true }`
+  - [✅] 2.2 执行 `pnpm run auth:generate` 重新生成 `packages/db/prisma/schema/auth.prisma`，核对只新增 `username`、`displayUsername`
+  - [✅] 2.3 执行 `pnpm run db:generate`、`pnpm run db:migrate`，生成第一份迁移并提交（本地开发库为空库，Prisma 要求时可以重置；`prisma migrate dev` 是交互式命令，非交互环境下用 `--name` 指定迁移名）
   - 对应验收标准：R01-AC4、R01-AC5、R01-AC8
-- [ ] 3. Web 客户端接入 `usernameClient()`
+  - 测试：pnpm run test --force && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force，通过（第 1 轮）
+- [✅] 3. Web 客户端接入 `usernameClient()`
   - 说明：修改 `apps/web/src/lib/auth-client.ts`，确认 `signUp.email` 的参数类型包含 `username`，`session.user` 类型包含 `username` / `displayUsername`
   - 对应验收标准：R01-AC7
-- [ ] 4. 新建注册校验规则与错误码映射
+  - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（另用临时类型断言确认 signUp.email 接受 username、session.user 含 username / displayUsername，验证后已删除），通过（第 1 轮）
+- [✅] 4. 新建注册校验规则与错误码映射
   - 说明：新建 `apps/web/src/lib/auth-validation.ts`（用户名 / 邮箱 / 密码常量、顶层正则、`signUpSchema` 含确认密码 `refine`）和 `apps/web/src/lib/auth-errors.ts`（错误码 → 中文文案，见 design.md「接口设计」）
   - 对应验收标准：R01-AC1、R01-AC2、R01-AC3、R01-AC4、R01-AC5
-- [ ] 5. 重写注册表单并调整 `/login` 页面
-  - [ ] 5.1 `apps/web/src/components/sign-up-form.tsx`：字段改为用户名、邮箱、密码、确认密码，每个字段有 `<Label htmlFor>`；用 `onChange` 校验实时显示错误；提交调用 `authClient.signUp.email({ email, password, username, name: username })`
-  - [ ] 5.2 服务端错误码按映射显示在对应字段下方，其他错误 `toast.error`；提交中按钮显示加载状态并禁用
-  - [ ] 5.3 成功后 `router.push("/dashboard")`
-  - [ ] 5.4 `apps/web/src/app/login/page.tsx` 默认显示登录面板，「登录 / 注册」切换按钮中文化；检查亮暗主题与 375px 宽度无横向滚动
+  - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（另用临时 vitest 用例验证 auth-validation / auth-errors 的 6.1、6.2 场景，验证后已删除），通过（第 1 轮）
+- [✅] 5. 重写注册表单并调整 `/login` 页面
+  - [✅] 5.1 `apps/web/src/components/sign-up-form.tsx`：字段改为用户名、邮箱、密码、确认密码，每个字段有 `<Label htmlFor>`；用 `onChange` 校验实时显示错误；提交调用 `authClient.signUp.email({ email, password, username, name: username })`
+  - [✅] 5.2 服务端错误码按映射显示在对应字段下方，其他错误 `toast.error`；提交中按钮显示加载状态并禁用
+  - [✅] 5.3 成功后 `router.push("/dashboard")`
+  - [✅] 5.4 `apps/web/src/app/login/page.tsx` 默认显示登录面板，「登录 / 注册」切换按钮中文化；检查亮暗主题与 375px 宽度无横向滚动
   - 对应验收标准：R01-AC1 ~ R01-AC7、R01-AC9、R01-AC10
-- [ ] 6. 编写测试
-  - [ ] 6.1 单元测试 `apps/web/src/lib/auth-validation.test.ts`：用户名 `ab`、`a b`、`中文名`、31 位字符串不通过，`abc`、`Tom_1.x`、30 位字符串通过；邮箱 `abc`、`a@b` 不通过，`a@b.co` 通过；密码 7 / 129 位不通过、8 / 128 位通过；确认密码不一致时错误落在 `confirmPassword`
-  - [ ] 6.2 单元测试 `apps/web/src/lib/auth-errors.test.ts`：`USERNAME_IS_ALREADY_TAKEN` → 「用户名已存在」，`USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` → 「邮箱已被注册」，未知错误码 → 通用文案
-  - [ ] 6.3 E2E `apps/web/e2e/sign-up.spec.ts`：非法用户名 / 邮箱 / 密码不一致时提交按钮不发请求并显示原因；先注册 `tom`，再注册 `Tom` 提示「用户名已存在」；用已注册邮箱的大写形式注册提示「邮箱已被注册」；正常注册跳转 `/dashboard`，`page.reload()` 后仍在 `/dashboard`；只用键盘（Tab / Enter）完成一次注册；375px 视口下 `document.documentElement.scrollWidth <= 375`
-  - [ ] 6.4 数据校验：E2E 注册 `Tom.Lee` 后查询数据库，`username = "tom.lee"`、`displayUsername = "Tom.Lee"`、`name = "Tom.Lee"`，`account.password` 不等于明文；检查 server 日志输出中不含明文密码
+  - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（另用临时 Playwright 用例在真实页面验证：默认登录面板与中文切换按钮、非法输入实时提示且提交按钮禁用、空表单提交显示必填提示、正常注册跳转 /dashboard、Tom 提示「用户名已存在」、大写邮箱提示「邮箱已被注册」、375px 亮暗主题 scrollWidth=375，验证后已删除），通过（第 1 轮）
+- [✅] 6. 编写测试
+  - [✅] 6.1 单元测试 `apps/web/src/lib/auth-validation.test.ts`：用户名 `ab`、`a b`、`中文名`、31 位字符串不通过，`abc`、`Tom_1.x`、30 位字符串通过；邮箱 `abc`、`a@b` 不通过，`a@b.co` 通过；密码 7 / 129 位不通过、8 / 128 位通过；确认密码不一致时错误落在 `confirmPassword`
+  - [✅] 6.2 单元测试 `apps/web/src/lib/auth-errors.test.ts`：`USERNAME_IS_ALREADY_TAKEN` → 「用户名已存在」，`USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` → 「邮箱已被注册」，未知错误码 → 通用文案
+  - [✅] 6.3 E2E `apps/web/e2e/sign-up.spec.ts`：非法用户名 / 邮箱 / 密码不一致时提交按钮不发请求并显示原因；先注册 `tom`，再注册 `Tom` 提示「用户名已存在」；用已注册邮箱的大写形式注册提示「邮箱已被注册」；正常注册跳转 `/dashboard`，`page.reload()` 后仍在 `/dashboard`；只用键盘（Tab / Enter）完成一次注册；375px 视口下 `document.documentElement.scrollWidth <= 375`
+  - [✅] 6.4 数据校验：E2E 注册 `Tom.Lee` 后查询数据库，`username = "tom.lee"`、`displayUsername = "Tom.Lee"`、`name = "Tom.Lee"`，`account.password` 不等于明文；检查 server 日志输出中不含明文密码
   - 对应验收标准：R01-AC1 ~ R01-AC10
+  - 测试：pnpm run test --force -F web && pnpm run test:e2e --force && pnpm run check && pnpm run check-types --force（web 单测 37 个、E2E 12 个全部通过），通过（第 1 轮）
 - [ ] 7. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R01-AC11
 - [ ] 8. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R01-AC1 ~ R01-AC11
 - CR（2026-11-06）：Codex 提出 1 条，采纳 1 条；不采纳：无
+- CR（2026-11-06）：Codex 提出 0 条，采纳 0 条；不采纳：无

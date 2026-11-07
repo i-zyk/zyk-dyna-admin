@@ -276,3 +276,7 @@ Biome will catch most mechanical issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm exec ultracite fix` before committing to ensure compliance.
+
+## 经验与踩坑
+
+- [2026-11-06][R01] `prisma migrate dev` 是交互式命令，非交互环境（agent / CI）下会卡住；执行时用 `--name <迁移名>` 指定迁移名

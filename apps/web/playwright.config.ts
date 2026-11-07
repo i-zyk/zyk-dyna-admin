@@ -1,10 +1,11 @@
+import path from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
 import { resolveTestDatabaseUrl } from "./e2e/support/database-url";
-import { SERVER_DIR, WEB_DIR } from "./e2e/support/paths";
+import { SERVER_DIR, SERVER_LOG_FILE, WEB_DIR } from "./e2e/support/paths";
+import { SERVER_URL, WEB_URL } from "./e2e/support/urls";
 
-const SERVER_URL = "http://localhost:3000";
-const WEB_URL = "http://localhost:3001";
 const SERVER_START_TIMEOUT_MS = 60_000;
 const WEB_START_TIMEOUT_MS = 180_000;
 
@@ -24,7 +25,8 @@ export default defineConfig({
 	},
 	webServer: [
 		{
-			command: "pnpm exec tsx src/index.ts",
+			// 输出同时写入 SERVER_LOG_FILE，供 E2E 检查日志中没有明文密码（webServer 命令由 sh 执行）
+			command: `mkdir -p ${JSON.stringify(path.dirname(SERVER_LOG_FILE))} && pnpm exec tsx src/index.ts 2>&1 | tee ${JSON.stringify(SERVER_LOG_FILE)}`,
 			cwd: SERVER_DIR,
 			// 固定地址，避免 .env 或 CI 覆盖后 server 与 E2E 用的地址不一致
 			env: {

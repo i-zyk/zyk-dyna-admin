@@ -129,12 +129,8 @@ export default function SignInForm({
 			</form>
 
 			<div className="mt-4 text-center">
-				<Button
-					className="text-indigo-600 hover:text-indigo-800"
-					onClick={onSwitchToSignUp}
-					variant="link"
-				>
-					Need an account? Sign Up
+				<Button onClick={onSwitchToSignUp} type="button" variant="link">
+					还没有账号？去注册
 				</Button>
 			</div>
 		</div>

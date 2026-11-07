@@ -24,12 +24,13 @@
 5. `/login` 页面：保留「登录 / 注册」切换，文案改为中文。技术参考未规定默认显示哪个面板，暂按默认显示「登录」、可切换到「注册」。（R02 会把该页改为 Server Component 并加已登录重定向，本需求只调整表单与切换。）
 6. 测试基础设施：Vitest（单元 / 集成）+ Playwright（Web E2E），已确认（见 requirements.md「已确认事项」）。E2E 连本地 PostgreSQL 18 的独立测试库 `zyk_dyna_admin_test`：测试配置从 `DATABASE_URL` 只替换库名得到测试库连接串，以环境变量覆盖的方式传给 server，测试前 `prisma migrate deploy` 并清空业务表；全程不读取、不打印 `.env` 里的密码。
    - 实现细节（W4a 补充）：测试库连接串由 `apps/web/e2e/support/database-url.ts` 通过 `varlock printenv DATABASE_URL`（在 `apps/server` 下执行，进程环境变量优先于 `.env`，已实测）在内存中得到，只替换库名；连接前断言库名为 `zyk_dyna_admin_test`。数据库校验与清表用 `pg`（Web 的 devDependency，只在 E2E 代码中使用）。web 的 Vitest 配置用 `.mts`，原因是 `apps/web` 不是 `"type": "module"`，`.ts` 会触发 Vite 的 CommonJS 警告；同理 Playwright 以 CommonJS 加载 e2e 文件，`e2e/support/paths.ts` 只能用 `__dirname`（已加 biome-ignore 说明）。webServer 设置 `reuseExistingServer: false`，避免复用连接开发库的服务，所以跑 E2E 前 3000 和 3001 端口必须空闲。
+   - 实现细节（W4a 任务 6 补充）：为了检查「日志中不出现明文密码」（6.4），server 的 webServer 命令改为 `mkdir -p … && pnpm exec tsx src/index.ts 2>&1 | tee apps/web/test-results/e2e-server.log`（webServer 命令由 sh 执行；Playwright 在启动 webServer 前清空 `test-results`，该目录已被 git 和 Biome 忽略）。E2E 用例与配置共用的地址抽到 `e2e/support/urls.ts`。`sign-up.spec.ts` 每个用例前清空业务表；准备已存在用户时直接调用 `POST /api/auth/sign-up/email`（带可信 `Origin`）。注意：`next dev` 每次启动都会按 Next 内置模板重写 `apps/web/AGENTS.md` 的 `nextjs-agent-rules` 块（标题从 `#` 变成 `##`），跑完 E2E 后需要 `git checkout -- apps/web/AGENTS.md` 还原。
 
 ## 涉及模块 / 文件
 
 | 文件 | 改动 |
 | --- | --- |
-| `packages/auth/src/index.ts` | `plugins: [expo(), username()]`，`username` 从 `better-auth/plugins` 导入 |
+| `packages/auth/src/index.ts` | `plugins: [expo(), username()]`，`username` 从 `better-auth/plugins/username` 导入（W4a：用子路径避免整包 barrel 导入，符合 AGENTS.md「Prefer specific imports」） |
 | `packages/db/prisma/schema/auth.prisma` | 由 `pnpm run auth:generate` 重新生成，不手改 |
 | `packages/db/prisma/migrations/<时间戳>_<名称>/migration.sql` | 由 `pnpm run db:migrate` 生成（首个迁移） |
 | `apps/web/src/lib/auth-client.ts` | `plugins: [usernameClient()]`，从 `better-auth/client/plugins` 导入 |
@@ -81,7 +82,15 @@
 | `USERNAME_IS_ALREADY_TAKEN` | 用户名字段下方 | 用户名已存在 |
 | `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` / `USER_ALREADY_EXISTS` | 邮箱字段下方 | 邮箱已被注册 |
 | `USERNAME_TOO_SHORT` / `USERNAME_TOO_LONG` / `INVALID_USERNAME` | 用户名字段下方 | 对应格式提示 |
+| `INVALID_EMAIL` | 邮箱字段下方 | 邮箱格式不正确（W4a 补充） |
+| `PASSWORD_TOO_SHORT` / `PASSWORD_TOO_LONG` | 密码字段下方 | 密码需为 8–128 位（W4a 补充） |
 | 其他 / 网络错误 | `toast.error` | 注册失败，请稍后再试 |
+
+实现细节（W4a 补充）：
+- `auth-validation.ts` 导出长度常量、`USERNAME_PATTERN`、`AUTH_VALIDATION_MESSAGES`，以及 `usernameSchema` / `emailSchema` / `passwordSchema` / `signUpSchema`（R02 可单独复用字段 schema）。各字段的「必填」检查带 `abort: true`，为空时只显示「请输入…」一条；邮箱先 `trim()` 再 `pipe(z.email())`，解析结果是 trim 后的值。确认密码的 `refine` 用 Zod 4 的 `when`，其他字段有错时也照常检查两次密码是否一致；确认密码为空时只提示「请再次输入密码」。
+- `auth-errors.ts` 导出 `getSignUpError(code)`，返回 `{ field, message }`，`field` 为 `"username" | "email" | "password" | undefined`（`undefined` 表示用 toast）；查表用 `Object.hasOwn`，避免 `toString` 这类错误码命中原型链。
+- 注册表单（任务 5）用字段级 `onChange` 校验（`usernameSchema` / `emailSchema` / `passwordSchema`，确认密码用 `onChangeListenTo: ["password"]` 的函数校验，规则与 `signUpSchema` 的 `refine` 一致），而不是表单级 `signUpSchema`：表单级 onChange 会在用户输入第一个字段时就给其余空字段报「请输入…」。提交时 TanStack Form 会先把所有字段标记为 touched 再跑全部 onChange 校验，所以空字段仍会被拦下；`onSubmit` 里再用 `signUpSchema.safeParse` 兜底并取 trim 后的邮箱。确认密码只因密码变化被触发、且用户还没碰过时，不提示「请再次输入密码」。
+- 服务端字段错误存在组件 state 里，与前端校验错误合并显示在字段下方，该字段再次输入时清除；输入框带 `aria-invalid` 和指向错误文案的 `aria-describedby`。表单加 `noValidate`，避免浏览器原生邮箱校验气泡抢在中文提示之前。注册成功后到跳转完成前按钮保持加载 + 禁用（`isRedirecting`），防止跳转前重复提交。切换按钮去掉写死的 `text-indigo-*` 颜色，错误文案用 `text-destructive`，保证暗色主题下对比度。
 
 ## 关键流程
 

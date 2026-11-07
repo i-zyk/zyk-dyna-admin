@@ -2,6 +2,7 @@ import { expo } from "@better-auth/expo";
 import type { Database } from "@zyk-dyna-admin/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { username } from "better-auth/plugins/username";
 
 export interface AuthConfig {
 	BETTER_AUTH_SECRET: string;
@@ -27,7 +28,7 @@ export function createAuth(
 			provider: "postgresql",
 		}),
 		emailAndPassword: { enabled: true },
-		plugins: [expo()],
+		plugins: [expo(), username()],
 		secret: env.BETTER_AUTH_SECRET,
 		trustedOrigins: [
 			env.CORS_ORIGIN,
