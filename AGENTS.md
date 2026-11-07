@@ -12,11 +12,12 @@
 | 文档站 | Fumadocs（Next.js 16 + MDX），提供 `llms.txt` / OG 图 / 搜索 |
 | 后端 | Hono 4（Node 运行时，`@hono/node-server`），开发用 `tsx watch`，构建用 `tsdown` |
 | API | tRPC v11 + `@trpc/tanstack-react-query` + TanStack Query v5 |
-| 认证 | Better Auth 1.7（邮箱密码 + `@better-auth/expo` 插件） |
+| 认证 | Better Auth 1.7（邮箱密码 + `username` 插件支持用户名或邮箱登录 + `@better-auth/expo` 插件） |
 | 数据库 | PostgreSQL + Prisma 7（`prisma-client` generator、ESM 输出、`@prisma/adapter-pg` 驱动适配器） |
 | 表单 / 校验 | TanStack Form + Zod 4 |
 | 环境变量 | Varlock（每个应用一个 `.env.schema`，自动生成类型安全的 `src/env.ts`） |
 | 代码质量 | Biome 2 + Ultracite（tab 缩进、双引号），TypeScript 6 strict |
+| 测试 | Vitest（`apps/web`、`packages/api` 单元 / 集成测试）+ Playwright（`apps/web/e2e` Web 端 E2E，连独立测试库） |
 
 ## 目录结构
 
@@ -24,9 +25,12 @@
 zyk-dyna-admin/
 ├── apps/
 │   ├── web/                     # Web 管理端 Next.js，端口 3001
-│   │   ├── src/app/             #   App Router：page.tsx / login/ / dashboard/（服务端校验 session，未登录 redirect）
-│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单等
-│   │   ├── src/lib/auth-client.ts   # better-auth/react 客户端
+│   │   ├── src/app/             #   App Router：page.tsx / login/（已登录 redirect 到 /dashboard）/ dashboard/（服务端校验 session，未登录 redirect，含 GitHub 用户查询）
+│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单、user-menu、github-user-search / github-user-card 等
+│   │   ├── src/lib/auth-client.ts   # better-auth/react 客户端（含 usernameClient）
+│   │   ├── src/lib/             #   auth-validation / auth-errors（表单校验、错误码映射）、github-*（用户名校验、资料格式化、错误文案），旁边是 *.test.ts
+│   │   ├── e2e/                 #   Playwright 用例 *.spec.ts；global-setup 迁移并清空测试库，support/ 放公共 helper
+│   │   ├── playwright.config.ts #   webServer 启动 server :3000（连测试库）和 web :3001
 │   │   ├── src/utils/trpc.ts    #   tRPC 客户端 + QueryClient（全局错误 toast，credentials: include）
 │   │   ├── src/env.ts           #   Varlock 自动生成，勿手改
 │   │   ├── next.config.ts       #   varlockNextConfigPlugin 包裹
@@ -52,8 +56,9 @@ zyk-dyna-admin/
 │   ├── api/                     # @zyk-dyna-admin/api：tRPC 业务层
 │   │   └── src/
 │   │       ├── index.ts         #   initTRPC、router、publicProcedure、protectedProcedure（无 session 抛 UNAUTHORIZED）
-│   │       ├── context.ts       #   Context 类型 { session, db }
-│   │       └── routers/index.ts #   appRouter（healthCheck、privateData），导出 AppRouter 类型
+│   │       ├── context.ts       #   Context 类型 { session, db, github }
+│   │       ├── lib/github.ts    #   createGithubClient(config) 工厂：调 GitHub REST API，抛带 kind 的 GithubApiError
+│   │       └── routers/         #   index.ts：appRouter（healthCheck、privateData、github），导出 AppRouter 类型；github.ts：github.getUser
 │   ├── auth/                    # @zyk-dyna-admin/auth：createAuth(env, db) 工厂 + Session 类型
 │   ├── db/                      # @zyk-dyna-admin/db：Prisma
 │   │   ├── prisma/schema/       #   多文件 schema：schema.prisma（generator/datasource）、auth.prisma（Better Auth 表）
@@ -93,6 +98,7 @@ apps/web ──> @zyk-dyna-admin/ui
 
 - `createPrismaClient(env: DatabaseConfig)` → `Database`
 - `createAuth(env: AuthConfig, db: Database)` → Better Auth 实例
+- `createGithubClient(config: GithubConfig)` → GitHub 客户端（经 tRPC context 注入为 `ctx.github`）
 
 唯一的组装点是 `apps/server/src/services.ts`，由应用自己的 Varlock `ENV` 注入。新增共享服务时沿用这个模式。
 
@@ -112,7 +118,7 @@ apps/web ──> @zyk-dyna-admin/ui
 
 ### 环境变量（Varlock）
 
-- 每个应用一个 `.env.schema`（已提交），实际值放 `.env`（已 gitignore）。schema 里给不敏感的 URL 写了 localhost 默认值，本地只需在 `apps/server/.env` 填 `DATABASE_URL` 和 `BETTER_AUTH_SECRET`；密钥类变量不要写默认值。
+- 每个应用一个 `.env.schema`（已提交），实际值放 `.env`（已 gitignore）。schema 里给不敏感的 URL 写了 localhost 默认值，本地只需在 `apps/server/.env` 填 `DATABASE_URL` 和 `BETTER_AUTH_SECRET`；密钥类变量不要写默认值。`GITHUB_TOKEN` 可选（敏感），不配置时匿名调用 GitHub API（每 IP 每小时 60 次），配置后按 Bearer Token 调用（每小时 5000 次）。
 - `packages/db/.env.schema` 通过 `@import` 复用 `apps/server` 的 `DATABASE_*`。
 - `src/env.ts` 是 **自动生成** 的，修改 schema 后执行 `pnpm run env:generate`，不要手改。
 - 应用代码用生成的 `ENV` 读取变量；server 入口须先 `import "./env.server"`（内含 `varlock/auto-load`）。
@@ -131,6 +137,9 @@ pnpm run db:studio
 pnpm run auth:generate       # 根据 Better Auth 配置重新生成 packages/db/prisma/schema/auth.prisma
 pnpm run check-types         # 全仓类型检查
 pnpm run check | fix         # Ultracite 检查 / 自动修复
+pnpm run test                # Vitest 单元 / 集成测试（apps/web、packages/api 的 *.test.ts）
+pnpm run test:e2e            # Playwright E2E（自动起 server + web，连测试库 zyk_dyna_admin_test）
+pnpm --dir packages/api run test:smoke   # 手动执行：访问真实 GitHub API 的冒烟测试（*.smoke.ts）
 ```
 
 ## 开发约定
@@ -147,6 +156,7 @@ pnpm run check | fix         # Ultracite 检查 / 自动修复
   - `packages/ui` 是 shadcn 生成的代码，对它单独关闭了几条无障碍和导出规则，不手改，方便以后用 CLI 升级覆盖。
   - tRPC 的 `Context` 必须用 `type`，不能改成 `interface`：`@hono/trpc-server` 要求它能赋给 `Record<string, unknown>`。
   - Web 端读取环境变量统一用 `import { ENV } from "@/env"`（Varlock 在构建时内联公开变量），不要写 `process.env.X!`。
+- **测试**：单元测试与被测文件同目录，命名 `*.test.ts`；E2E 放 `apps/web/e2e/*.spec.ts`。E2E 只连测试库 `zyk_dyna_admin_test`（由 `apps/server` 的 `DATABASE_URL` 只替换库名得到，与开发库同一账号），`global-setup` 先 `db:migrate:deploy` 再清空业务表；E2E 里的 GitHub 请求用 `page.route` 模拟，不访问真实 GitHub。首次跑 E2E 前需要安装浏览器：`pnpm --dir apps/web exec playwright install chromium`。
 
 ---
 
