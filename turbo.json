@@ -23,6 +23,13 @@
       "persistent": true,
       "passThroughEnv": ["*"]
     },
+    "test": {
+      "outputs": []
+    },
+    "test:e2e": {
+      "cache": false,
+      "passThroughEnv": ["PLAYWRIGHT_*"]
+    },
     "db:push": {
       "cache": false,
       "interactive": true

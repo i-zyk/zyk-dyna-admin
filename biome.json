@@ -37,7 +37,10 @@
       "!**/src/env.ts",
       "!**/prisma/generated",
       "!**/uniwind-types.d.ts",
-      "!**/next-env.d.ts"
+      "!**/next-env.d.ts",
+      "!**/test-results",
+      "!**/playwright-report",
+      "!**/blob-report"
     ]
   },
   "formatter": {
