@@ -42,6 +42,8 @@ const RAW_ERROR_MESSAGE = "raw upstream error from e2e mock";
 const SIGN_IN_SUCCESS_TOAST = "登录成功";
 
 const FORTY_CHAR_USERNAME = "a".repeat(40);
+/** 比 5 分钟缓存期多一点，让同一用户名的再次搜索重新请求 */
+const CACHE_EXPIRED_FAST_FORWARD = "05:01";
 
 function makeProfile(
 	login: string,
@@ -436,6 +438,29 @@ test("5 分钟内重复搜索同一用户名命中缓存：中间搜索其他用
 	await searchByClick(search, "sentinel");
 	await expect(getCard(page, "sentinel")).toBeVisible();
 	expect(requested).toEqual(["torvalds", "octocat", "sentinel"]);
+});
+
+test("缓存过期后再次搜索同一用户名失败时，只显示错误，不保留上一次的卡片", async ({
+	page,
+}) => {
+	const replies: Record<string, MockReply> = {
+		torvalds: { kind: "profile", profile: TORVALDS },
+	};
+	const requested = await mockGithubUser(page, replies);
+	const search = getSearch(page);
+	await page.clock.install();
+
+	await searchByClick(search, "torvalds");
+	await expect(getCard(page, "torvalds")).toBeVisible();
+
+	// 超过 5 分钟缓存期，并让下一次请求返回 404
+	await page.clock.fastForward(CACHE_EXPIRED_FAST_FORWARD);
+	replies.torvalds = NOT_FOUND_REPLY;
+	await searchByClick(search, "torvalds");
+
+	await expect(search.alert).toHaveText(NOT_FOUND_MESSAGE);
+	await expect(getCard(page, "torvalds")).toHaveCount(0);
+	expect(requested).toEqual(["torvalds", "torvalds"]);
 });
 
 test("只用键盘就能完成搜索：Tab 聚焦搜索框，输入后按回车", async ({ page }) => {

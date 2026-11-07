@@ -75,7 +75,10 @@ export default function GithubUserSearch() {
 		!isFetching && userQuery.isError
 			? getGithubSearchErrorMessage(userQuery.error.data?.code)
 			: undefined;
-	const profile = isFetching ? undefined : userQuery.data;
+	// 只在查询成功时显示卡片：刷新失败时 TanStack Query 仍保留上一次的 data，
+	// 不能把旧资料和错误提示同时展示
+	const profile =
+		!isFetching && userQuery.isSuccess ? userQuery.data : undefined;
 
 	return (
 		<section aria-labelledby="github-user-search-title" className="space-y-4">
