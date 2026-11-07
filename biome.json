@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "extends": ["ultracite/biome/core", "ultracite/biome/react", "ultracite/biome/next"],
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/next"
+  ],
   "vcs": {
     "enabled": false,
     "clientKind": "git",
@@ -9,7 +13,6 @@
   "files": {
     "ignoreUnknown": false,
     "includes": [
-      "**",
       "!**/.next",
       "!**/dist",
       "!**/.turbo",
@@ -27,7 +30,14 @@
       "!**/.svelte-kit",
       "!**/wrangler.jsonc",
       "!**/.source",
-      "!**/convex/_generated"
+      "!**/convex/_generated",
+      "!.agents",
+      "!.claude",
+      "!.codex",
+      "!**/src/env.ts",
+      "!**/prisma/generated",
+      "!**/uniwind-types.d.ts",
+      "!**/next-env.d.ts"
     ]
   },
   "formatter": {
@@ -42,8 +52,15 @@
       "correctness": {
         "useExhaustiveDependencies": "info"
       },
+      "performance": {
+        "noJsxPropsBind": "off"
+      },
+      "suspicious": {
+        "noUnnecessaryConditions": "off",
+        "noParametersOnlyUsedInRecursion": "off"
+      },
       "nursery": {
-        "useTailwindSortedClasses": {
+        "useSortedClasses": {
           "level": "warn",
           "fix": "safe"
         }
@@ -62,6 +79,27 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["packages/ui/src/components/**", "packages/ui/src/lib/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "noNoninteractiveElementInteractions": "off",
+            "useKeyWithClickEvents": "off",
+            "noLabelWithoutControl": "off"
+          },
+          "performance": {
+            "noBarrelFile": "off"
+          },
+          "style": {
+            "noExportedImports": "off"
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "double"

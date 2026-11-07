@@ -1,3 +1,3 @@
-export type DatabaseConfig = {
-  DATABASE_URL: string;
-};
+export interface DatabaseConfig {
+	DATABASE_URL: string;
+}

@@ -1,27 +1,27 @@
 {
   "name": "zyk-dyna-admin",
   "private": true,
+  "type": "module",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
-  "type": "module",
   "scripts": {
-    "dev": "turbo run dev",
+    "auth:generate": "cd apps/server && pnpm run auth:generate",
     "build": "turbo run build",
+    "check": "ultracite check",
     "check-types": "turbo run check-types",
-    "dev:native": "turbo run dev -F native --",
-    "dev:web": "turbo run dev -F web --",
-    "dev:server": "turbo run dev -F server --",
-    "db:push": "turbo run db:push -F @zyk-dyna-admin/db --",
-    "db:studio": "turbo run db:studio -F @zyk-dyna-admin/db --",
     "db:generate": "turbo run db:generate -F @zyk-dyna-admin/db --",
     "db:migrate": "turbo run db:migrate -F @zyk-dyna-admin/db --",
+    "db:push": "turbo run db:push -F @zyk-dyna-admin/db --",
+    "db:studio": "turbo run db:studio -F @zyk-dyna-admin/db --",
+    "dev": "turbo run dev",
+    "dev:native": "turbo run dev -F native --",
+    "dev:server": "turbo run dev -F server --",
+    "dev:web": "turbo run dev -F web --",
     "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
-    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/",
-    "auth:generate": "cd apps/server && pnpm run auth:generate",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "fix": "ultracite fix",
+    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./apps/native/ && varlock codegen --path ./packages/db/"
   },
   "dependencies": {
     "zod": "catalog:"

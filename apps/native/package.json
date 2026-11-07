@@ -4,14 +4,14 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
-    "dev": "expo start --clear",
     "android": "expo run:android",
+    "check-types": "tsc --noEmit",
+    "dev": "expo start --clear",
+    "env:generate": "varlock codegen",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild",
-    "web": "expo start --web",
-    "check-types": "tsc --noEmit",
-    "env:generate": "varlock codegen"
+    "start": "expo start",
+    "web": "expo start --web"
   },
   "dependencies": {
     "@better-auth/expo": "catalog:",
