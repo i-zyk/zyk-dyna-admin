@@ -50,6 +50,7 @@
 | `apps/web/src/app/dashboard/page.tsx`、`apps/web/src/app/dashboard/dashboard.tsx` | 渲染搜索组件 |
 | `apps/web/src/utils/trpc.ts` | 全局错误 toast 支持 `meta.skipGlobalErrorToast` |
 | `packages/api/src/**/*.test.ts`、`apps/web/src/lib/*.test.ts`、`apps/web/e2e/github-search.spec.ts` | 测试 |
+| `packages/api/src/lib/github.smoke.ts`、`packages/api/vitest.smoke.config.ts`、`packages/api/package.json`（`test:smoke` 脚本） | 真实 GitHub 冒烟（可选，任务 7.5）：不带 Token 经 `appRouter.createCaller` 查询 `torvalds`；只匹配 `*.smoke.ts`，不进入 `pnpm run test` / turbo 流水线，手动执行 `pnpm --dir packages/api run test:smoke` |
 
 ## 数据模型
 

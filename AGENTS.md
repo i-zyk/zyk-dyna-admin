@@ -282,3 +282,4 @@ Most formatting and common issues are automatically fixed by Biome. Run `pnpm ex
 - [2026-11-06][R01] `prisma migrate dev` 是交互式命令，非交互环境（agent / CI）下会卡住；执行时用 `--name <迁移名>` 指定迁移名
 - [2026-11-06][R02] Server Component 里用 `authClient.getSession` 判断登录态时，必须通过 `fetchOptions.headers: await headers()` 转发请求头（带上 cookie），否则永远拿不到 session；不传 `throw` 只能把 HTTP 错误响应变成 `{ error }`，连接被拒、DNS 失败等网络异常仍会 reject，要按未登录处理就得再用 try / catch 捕获（`redirect` 靠抛异常跳转，要放在 try 之外）
 - [2026-11-06][R02] E2E 的键盘导航（`tabUntilFocused` / `pressUntilFocused`）、窄屏视口 `NARROW_VIEWPORT`、`getScrollWidth` 已抽到 `apps/web/e2e/support/page-helpers.ts`；新写 E2E 直接复用，不要在 spec 里重复实现
+- [2026-11-07][R03] 访问真实外部服务（如 GitHub API）的冒烟测试命名为 `*.smoke.ts`，用单独的 `vitest.smoke.config.ts` + `test:smoke` 脚本手动执行；默认 `vitest run` 只匹配 `*.test.ts`，不会把它带进 `pnpm run test` / turbo 流水线，避免消耗额度和依赖网络

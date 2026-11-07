@@ -14,22 +14,22 @@
 
 ## 验收标准
 
-- [ ] R03-AC1：`/dashboard` 页面有带 `<label>` 的搜索框和「搜索」按钮，点击按钮或按回车都能发起搜索，只用键盘就能完成搜索。
-- [ ] R03-AC2：当输入为空（或只有空格）时，系统应当不发出请求。
-- [ ] R03-AC3：当输入的 GitHub 用户名格式不合法（不是 1–39 位、包含字母数字和单个连字符以外的字符、以 `-` 开头或结尾、包含连续 `--`，例如 `-abc`、40 位字符串）时，前端应当直接提示「GitHub 用户名格式不正确」，并且不发出网络请求。
-- [ ] R03-AC4：当查询进行中时，系统应当显示加载状态（骨架屏），并防止重复提交。
-- [ ] R03-AC5：当查询成功（例如搜索 `torvalds`）时，系统应当以卡片形式展示头像、昵称、用户名、简介、公司、所在地、博客 / 网站、公开仓库数、粉丝数 / 关注数、注册时间。
-- [ ] R03-AC6：当 `name` 为空时，昵称位置显示用户名；`bio`、`company`、`location`、`blog` 为空时对应行不显示；页面上任何位置都不出现 `null` 或 `undefined`。
-- [ ] R03-AC7：注册时间格式为 `YYYY-MM-DD`。
-- [ ] R03-AC8：用户名链接跳转到 GitHub 主页（`html_url`），博客 / 网站可点击；所有外部链接都带 `target="_blank"` 和 `rel="noopener noreferrer"`。
-- [ ] R03-AC9：当 GitHub 返回 404 时，系统应当显示「未找到该 GitHub 用户」，页面不崩溃。
-- [ ] R03-AC10：当 GitHub 返回 403 或 429 时，系统应当显示「请求过于频繁，请稍后再试」。
-- [ ] R03-AC11：当出现网络错误或其他错误时，系统应当显示「查询失败，请稍后再试」。
-- [ ] R03-AC12：5 分钟内重复搜索同一个用户名时，系统应当命中缓存，不重复发请求。
-- [ ] R03-AC13：GitHub 请求由后端 `github.getUser`（`protectedProcedure`）代理：未登录调用返回 `UNAUTHORIZED`；入参用 Zod 校验 GitHub 用户名格式；只返回展示所需字段，不透传 GitHub 原始响应；请求头带 `Accept: application/vnd.github+json` 和 `User-Agent`。
-- [ ] R03-AC14：`apps/server/.env.schema` 声明可选、敏感的 `GITHUB_TOKEN`：未配置时服务正常启动、匿名调用 GitHub；配置后以 `Authorization: Bearer <token>` 调用；Token 不出现在日志和返回值中。
-- [ ] R03-AC15：`/dashboard` 在亮色 / 暗色主题下正常显示，在 375px 宽的屏幕上不出现横向滚动（包括很长的简介、博客地址）。
-- [ ] R03-AC16：本需求的改动通过 `pnpm run check` 和 `pnpm run check-types`。
+- [✅] R03-AC1：`/dashboard` 页面有带 `<label>` 的搜索框和「搜索」按钮，点击按钮或按回车都能发起搜索，只用键盘就能完成搜索。
+- [✅] R03-AC2：当输入为空（或只有空格）时，系统应当不发出请求。
+- [✅] R03-AC3：当输入的 GitHub 用户名格式不合法（不是 1–39 位、包含字母数字和单个连字符以外的字符、以 `-` 开头或结尾、包含连续 `--`，例如 `-abc`、40 位字符串）时，前端应当直接提示「GitHub 用户名格式不正确」，并且不发出网络请求。
+- [✅] R03-AC4：当查询进行中时，系统应当显示加载状态（骨架屏），并防止重复提交。
+- [✅] R03-AC5：当查询成功（例如搜索 `torvalds`）时，系统应当以卡片形式展示头像、昵称、用户名、简介、公司、所在地、博客 / 网站、公开仓库数、粉丝数 / 关注数、注册时间。
+- [✅] R03-AC6：当 `name` 为空时，昵称位置显示用户名；`bio`、`company`、`location`、`blog` 为空时对应行不显示；页面上任何位置都不出现 `null` 或 `undefined`。
+- [✅] R03-AC7：注册时间格式为 `YYYY-MM-DD`。
+- [✅] R03-AC8：用户名链接跳转到 GitHub 主页（`html_url`），博客 / 网站可点击；所有外部链接都带 `target="_blank"` 和 `rel="noopener noreferrer"`。
+- [✅] R03-AC9：当 GitHub 返回 404 时，系统应当显示「未找到该 GitHub 用户」，页面不崩溃。
+- [✅] R03-AC10：当 GitHub 返回 403 或 429 时，系统应当显示「请求过于频繁，请稍后再试」。
+- [✅] R03-AC11：当出现网络错误或其他错误时，系统应当显示「查询失败，请稍后再试」。
+- [✅] R03-AC12：5 分钟内重复搜索同一个用户名时，系统应当命中缓存，不重复发请求。
+- [✅] R03-AC13：GitHub 请求由后端 `github.getUser`（`protectedProcedure`）代理：未登录调用返回 `UNAUTHORIZED`；入参用 Zod 校验 GitHub 用户名格式；只返回展示所需字段，不透传 GitHub 原始响应；请求头带 `Accept: application/vnd.github+json` 和 `User-Agent`。
+- [✅] R03-AC14：`apps/server/.env.schema` 声明可选、敏感的 `GITHUB_TOKEN`：未配置时服务正常启动、匿名调用 GitHub；配置后以 `Authorization: Bearer <token>` 调用；Token 不出现在日志和返回值中。
+- [✅] R03-AC15：`/dashboard` 在亮色 / 暗色主题下正常显示，在 375px 宽的屏幕上不出现横向滚动（包括很长的简介、博客地址）。
+- [✅] R03-AC16：本需求的改动通过 `pnpm run check` 和 `pnpm run check-types`。
 
 ## 不在范围内
 

@@ -36,7 +36,7 @@
   - [✅] 6.3 `apps/web/src/app/dashboard/page.tsx` / `dashboard.tsx` 保留服务端 session 校验，渲染 `GithubUserSearch`（替换 `privateData` 示例展示）
     - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 75 个 + 6 个任务 tsc 通过）+ `pnpm run check` + `pnpm run test:e2e --force`（Playwright 29 个用例通过，连测试库 zyk_dyna_admin_test）+ 临时 Playwright 用例（`page.route` 模拟 `/trpc/github.getUser`）校验：登录后 /dashboard 显示「Dashboard」标题、`Welcome Tom` 和「GitHub 用户查询」，不再请求 `privateData`、无「API:」文本；` Torvalds ` 回车搜索只发 1 次请求并显示资料卡片，页面不含 `null` / `undefined`；375px 宽无横向滚动；清 cookie 后访问 /dashboard 被重定向到 /login，通过（第 1 轮）
   - 对应验收标准：R03-AC1 ~ R03-AC12、R03-AC15
-- [ ] 7. 编写测试
+- [✅] 7. 编写测试
   - [✅] 7.1 `packages/api` 单元测试 `github.test.ts`（注入假 `fetch`）：200 时只返回 `GithubUserProfile` 字段（多余字段被丢弃，`blog: ""` 转 `null`）；404 → `not_found`；403、429 → `rate_limited`；500、网络异常、超时、响应结构不对 → `upstream`；未配置 Token 时没有 `Authorization` 头，配置后为 `Bearer <token>`；`Accept`、`User-Agent` 头正确
     - 测试：`pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 19 个通过：`github.test.ts` 17 个 + `routers/index.test.ts` 2 个；db / auth / api tsc 通过）+ `pnpm run check`（148 个文件无问题），通过（第 1 轮）
   - [✅] 7.2 `packages/api` 路由测试 `routers/github.test.ts`（`createCaller`，注入假 `GithubClient`）：`session: null` 时抛 `UNAUTHORIZED`；`-abc`、`abc-`、`a--b`、40 位字符串抛 `BAD_REQUEST`；`not_found` / `rate_limited` / `upstream` 分别映射为 `NOT_FOUND` / `TOO_MANY_REQUESTS` / `INTERNAL_SERVER_ERROR`
@@ -45,11 +45,15 @@
     - 测试：`pnpm exec turbo run test check-types -F web --force`（web 单测 129 个通过：`github-username.test.ts` 37 个 + `github-profile-format.test.ts` 17 个 + `auth-errors` 37 个 + `auth-validation` 38 个；6 个任务 tsc 通过）+ `pnpm run check`（151 个文件无问题），通过（第 1 轮）
   - [✅] 7.4 E2E `apps/web/e2e/github-search.spec.ts`（先登录；用 Playwright 拦截并计数 `/trpc/github.getUser` 请求，在 server 端用可控的假 GitHub 响应或 `page.route` 模拟 tRPC 响应，避免依赖真实 GitHub 额度）：空输入和 `-abc`、40 位字符串不发请求且显示格式错误；`torvalds` 显示头像、昵称、仓库数、粉丝数、关注数、注册时间；缺少 `bio` 等字段时对应行不存在且页面文本不含 `null` / `undefined`；外链带 `target="_blank"` 和 `rel="noopener noreferrer"`；404 / 429 / 500 分别显示对应文案且页面不崩溃；同一用户名 5 分钟内搜索两次（中间搜索另一个用户）只发出一次请求，先搜 `Torvalds` 再搜 `torvalds` 也只发出一次请求；回车可搜索；375px 视口下长简介不出现横向滚动
     - 测试：`pnpm --dir apps/web run test`（web 单测 129 个通过）+ `pnpm --dir apps/web run test:e2e`（Playwright 44 个用例通过：`github-search.spec.ts` 15 个 + sign-in 16 个 + sign-up 11 个 + smoke 2 个，连测试库 zyk_dyna_admin_test，`page.route` 模拟 `/trpc/github.getUser` 与头像，不访问真实 GitHub）+ `pnpm run check`（152 个文件无问题）+ `pnpm run check-types`（7 个包 tsc 通过），通过（第 1 轮）
-  - [ ] 7.5 真实 GitHub 冒烟（手动或标记为可选用例）：未配置 `GITHUB_TOKEN` 时搜索 `torvalds` 成功
+  - [✅] 7.5 真实 GitHub 冒烟（手动或标记为可选用例）：未配置 `GITHUB_TOKEN` 时搜索 `torvalds` 成功
+    - 测试：`env -u GITHUB_TOKEN pnpm --dir packages/api run test:smoke`（真实 GitHub 冒烟 1 个通过：`lib/github.smoke.ts` 不带 Token 经 `appRouter.createCaller` 查到 `torvalds`）+ `pnpm exec turbo run test check-types -F @zyk-dyna-admin/api --force`（api 单测 32 个通过，smoke 不进入默认测试；db / auth / api tsc 通过）+ `pnpm run check`（154 个文件无问题），通过（第 1 轮）
   - 对应验收标准：R03-AC1 ~ R03-AC15
-- [ ] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+- [✅] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R03-AC16
-- [ ] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 测试：`pnpm run check`（ultracite/Biome 154 个文件无问题）+ `pnpm run check-types --force`（7 个包 tsc --noEmit 通过）+ `pnpm run test --force`（api 单测 32 个、web 单测 129 个通过），通过（第 1 轮）
+- [✅] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R03-AC1 ~ R03-AC16
+  - 测试：`pnpm run test --force`（api 单测 32 个、web 单测 129 个通过）+ `pnpm run test:e2e --force`（Playwright 44 个用例通过：github-search 15 + sign-in 16 + sign-up 11 + smoke 2，连测试库 zyk_dyna_admin_test）+ `env -u GITHUB_TOKEN pnpm --dir packages/api run test:smoke`（真实 GitHub 冒烟 1 个通过）+ `pnpm run check`（154 个文件无问题）+ `pnpm run check-types --force`（7 个包 tsc 通过）+ 临时 Playwright 用例（`page.route` 模拟 `/trpc/github.getUser`）在 light / dark 下截图人工核对 /dashboard：资料卡片、404 文案、格式错误提示、375px 宽缺字段卡片均显示正常、文字对比清晰、无 `null` / `undefined`，通过（第 1 轮）
 - CR（2026-11-06）：Codex 提出 1 条，采纳 1 条；不采纳：无
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
