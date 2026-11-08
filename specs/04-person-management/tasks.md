@@ -1,0 +1,58 @@
+# R04 人员管理（入库、修改、删除） - 任务清单
+
+> 完成一项后把 `- [ ]` 改为 `- [✅]`
+
+- [✅] 1. 新增 `person` 数据表与迁移
+  - 说明：新建 `packages/db/prisma/schema/person.prisma`（`Person` 模型、`PersonStatus` 枚举、`employeeNo @unique`、`@@index([updatedAt])`、`@@map("person")`，字段见 design.md「数据模型」）；执行 `pnpm run db:generate`，再执行 `pnpm run db:migrate -- --name add_person`（非交互，必须带 `--name`）；`packages/db/src/index.ts` 追加导出 `Prisma`、`PersonStatus`；确认 E2E `global-setup` 的清表逻辑会清空 `person` 表
+  - 对应验收标准：R04-AC15
+  - 测试：`pnpm run db:generate`、`prisma migrate status`、`prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code`（开发库无差异）、测试库 `db:migrate:deploy` + 插入校验（`employeeNo` 唯一约束 23505、`status` 默认 `ACTIVE`）+ `resetTestDatabase()` 后 `person` 为 0 行、`turbo run check-types --force`（db / api / server）、`pnpm run check-types`、`pnpm run test`、`biome check packages/db`，通过（第 1 轮）
+- [✅] 2. 服务端入参 schema 与归一化
+  - 说明：新建 `packages/api/src/lib/person-input.ts`（只依赖 `zod`）：`EMPLOYEE_NO_PATTERN`、`PHONE_PATTERN`、长度常量；`personInputSchema`（trim、工号转大写、邮箱转小写、选填空串 / `null` / `undefined` 统一为 `null`）、`personListInputSchema`（`keyword?` trim 最多 100、`status?`、`page` ≥ 1 默认 1、`pageSize` 1–100 默认 20）、`personIdSchema`
+  - 对应验收标准：R04-AC4、R04-AC5、R04-AC6、R04-AC14
+  - 测试：`pnpm --dir packages/api run test`、`pnpm --dir packages/api run check-types`、`biome check packages/api`、临时脚本（tsx）按 7.1 用例校验 `personInputSchema` / `personListInputSchema` / `personIdInputSchema` / `personUpdateInputSchema` 的拒绝与归一化结果，通过（第 1 轮）
+- [✅] 3. `person` tRPC 子路由
+  - [✅] 3.1 新建 `packages/api/src/lib/prisma-errors.ts`：`isPrismaErrorCode(error, code)`（`@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError` 且 `code` 相等）
+  - [✅] 3.2 新建 `packages/api/src/routers/person.ts`：`list`（姓名或工号 `contains` + `mode: "insensitive"`、状态筛选、`updatedAt desc, id desc`、`skip` / `take`、`findMany` 与 `count` 并行，返回 `{ items, total, page, pageSize }`）、`getById`（查不到 → `NOT_FOUND`）、`create`、`update`（整体替换）、`delete`（物理删除，返回 `{ id }`），全部 `protectedProcedure`；`P2002` → `CONFLICT`、`P2025` → `NOT_FOUND`，其他错误 → `INTERNAL_SERVER_ERROR`，message 不回显数据库原始信息；验证 `contains` 对 `%` / `_` 是否已转义，未转义则手动转义
+  - [✅] 3.3 在 `packages/api/src/routers/index.ts` 合并 `person: personRouter`
+  - 对应验收标准：R04-AC1、R04-AC5、R04-AC6、R04-AC9、R04-AC10、R04-AC12、R04-AC13、R04-AC14
+  - 测试：`pnpm --dir packages/api run test`、`pnpm run test`、`pnpm --dir packages/api run check-types`、`pnpm --dir apps/server run check-types`、`pnpm --dir apps/web run check-types`、`biome check packages/api packages/db`、临时脚本（tsx + `appRouter.createCaller` 连测试库）校验未登录 5 个过程 `UNAUTHORIZED`、`create` 归一化、`P2002` → `CONFLICT`（新增 / 编辑）、`P2025` / 查不到 → `NOT_FOUND`、`%` / `_` 按字面匹配、工号不区分大小写搜索、状态筛选、分页与 `{ items, total, page, pageSize }`、`update` 整体替换、`delete` 返回 `{ id }`、非法入参 `BAD_REQUEST`，通过（第 1 轮）
+- [✅] 4. 添加 shadcn 组件
+  - 说明：执行 `npx shadcn@latest add table alert-dialog select -c packages/ui`，提示覆盖 `button.tsx` 时选择不覆盖；核对 `package.json` / `pnpm-lock.yaml` 没有新增依赖（有的话先暂停确认）
+  - 对应验收标准：R04-AC9、R04-AC12、R04-AC16
+  - 测试：`git diff -- '**/package.json' pnpm-lock.yaml`（无新增依赖，`button.tsx` 未被覆盖）、`pnpm --dir packages/ui run check-types`、`pnpm --dir apps/web run check-types`、`biome check packages/ui`、`pnpm run check-types`、`pnpm run test`，通过（第 1 轮）
+- [ ] 5. 前端工具函数
+  - 说明：新建 `apps/web/src/lib/person-validation.ts`（与后端同一组正则和长度常量、带中文文案的字段 schema、`PERSON_STATUS_OPTIONS`、`toPersonInput()`）、`apps/web/src/lib/person-format.ts`（`formatPersonDateTime()`、`displayPersonValue()`、`getTotalPages()`）、`apps/web/src/lib/person-errors.ts`（`CONFLICT` → 工号已存在、`NOT_FOUND` → 该人员不存在或已被删除、保存 / 删除 / 加载失败兜底文案）、`apps/web/src/lib/server-session.ts`（`getServerSessionUser()`，转发 `headers()`，网络异常 try / catch 返回 `null`）
+  - 对应验收标准：R04-AC4、R04-AC5、R04-AC9、R04-AC13
+- [ ] 6. 页面与组件
+  - [ ] 6.1 路由与导航：新建 `apps/web/src/app/persons/page.tsx`、`persons/new/page.tsx`、`persons/[id]/edit/page.tsx`（Server Component，`getServerSessionUser()` 为空时在 try 之外 `redirect("/login")`；编辑页 `params` 为 Promise）；`header.tsx` 增加「人员管理」链接；检查 375px 下顶部导航不撑出横向滚动
+    - 对应验收标准：R04-AC1、R04-AC2、R04-AC16
+  - [ ] 6.2 新建 `apps/web/src/components/person-form.tsx`（新增 / 编辑共用：每个字段有 `<Label htmlFor>`，状态用 `Select` 默认在职，备注用 `Textarea`；字段级实时校验，错误显示在字段下方并设置 `aria-invalid` / `aria-describedby`；服务端 `CONFLICT` 显示在工号字段下「工号已存在」；提交中按钮加载并禁用；「取消」回 `/persons`）和 `person-create.tsx`（`person.create`，成功后让 `person.list` 失效、toast「已保存」、回列表），挂到 `/persons/new`
+    - 对应验收标准：R04-AC3、R04-AC4、R04-AC5、R04-AC7、R04-AC8、R04-AC16
+  - [ ] 6.3 新建 `apps/web/src/components/person-edit.tsx`：`person.getById`（`retry: false`、`meta.skipGlobalErrorToast`）回填表单，加载中显示骨架屏；`NOT_FOUND` 显示「该人员不存在或已被删除」+「返回列表」；`person.update` 成功后让 `person.list` 和该 `getById` 失效、toast「已保存」、回列表；提交时 `NOT_FOUND` 切换为不存在提示；挂到 `/persons/[id]/edit`
+    - 对应验收标准：R04-AC5、R04-AC7、R04-AC8、R04-AC13
+  - [ ] 6.4 新建 `apps/web/src/components/person-list.tsx`：带 `<Label>` 的搜索框 +「搜索」按钮（`<form>` 提交，回车可用，搜索后回第 1 页）、状态 `Select`（全部 / 在职 / 离职，切换后回第 1 页）、「新增人员」按钮；`Table` 列为工号、姓名、部门、职位、手机号、状态、更新时间、操作（编辑链接 / 删除按钮），外层 `overflow-x-auto`；空值显示 `-`，更新时间 `YYYY-MM-DD HH:mm`；「上一页」/「下一页」+「第 X / Y 页，共 N 条」，首末页禁用对应按钮；`keepPreviousData`；页码越界自动回退；空状态「暂无人员」+「新增人员」与无结果「没有找到匹配的人员」；加载失败页面内提示
+    - 对应验收标准：R04-AC2、R04-AC9、R04-AC10、R04-AC11、R04-AC16
+  - [ ] 6.5 新建 `apps/web/src/components/person-delete-dialog.tsx`：`AlertDialog` 文案「确定删除人员「姓名（工号）」吗？删除后无法恢复。」，取消 / Esc 不删除；确认按钮在请求中禁用；成功 toast「已删除」，`NOT_FOUND` toast「该人员不存在或已被删除」，两种情况都让 `person.list` 失效（当前页删空由 6.4 的越界回退处理）；在列表每行接入
+    - 对应验收标准：R04-AC12、R04-AC13、R04-AC16
+- [ ] 7. 编写测试
+  - [ ] 7.1 `packages/api` 单元测试 `lib/person-input.test.ts`：姓名空串 / 只有空格 / 51 个字符被拒，50 个字符通过且首尾空格被去掉；工号 `a`、33 位、`A 001`、`工号1`、`A_001` 被拒，` a-001 ` 归一化为 `A-001`；手机号 `1381234567`（10 位）、`12812345678`、`23812345678`、`138123456789` 被拒，`13812345678` 通过；邮箱 `abc`、`a@b` 被拒，` Tom@Example.COM ` 归一化为 `tom@example.com`；部门 / 职位 51 个字符、备注 501 个字符被拒；选填字段 `""`、`"  "`、`null`、`undefined` 都归一化为 `null`；状态缺省或不是 `ACTIVE` / `INACTIVE` 时被拒；`personListInputSchema` 的 `page` < 1、`pageSize` > 100 被拒，默认值为 1 / 20，`keyword` 只有空格视为无条件
+  - [ ] 7.2 `packages/api` 路由测试 `routers/person.test.ts`（`appRouter.createCaller` + 注入假 `db.person`，抛 `@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError`）：`session: null` 时 5 个过程都抛 `UNAUTHORIZED` 且不访问数据库；`create` / `update` 传给 Prisma 的数据已归一化（工号大写、邮箱小写、空串转 `null`）；`P2002` → `CONFLICT`；`getById` 查不到、`update` / `delete` 抛 `P2025` → `NOT_FOUND`；其他错误 → `INTERNAL_SERVER_ERROR` 且不回显原始信息；`list` 的 `where`（姓名或工号 `insensitive`、状态）、`orderBy`、`skip` / `take` 与返回结构 `{ items, total, page, pageSize }` 正确；非法入参 `BAD_REQUEST` 且不访问数据库
+  - [ ] 7.3 `apps/web` 单元测试：`person-validation.test.ts`（与 7.1 同一组用例的前端结果，并断言前后端正则 `source` 一致、对同组用例结果一致；中文错误文案）；`person-format.test.ts`（`formatPersonDateTime` 输出 `YYYY-MM-DD HH:mm`、非法值返回 `-`；`displayPersonValue` 对 `null` / `undefined` / `""` 返回 `-`；`getTotalPages(0, 20) = 1`、`(20, 20) = 1`、`(21, 20) = 2`）；`person-errors.test.ts`（`CONFLICT`、`NOT_FOUND`、`INTERNAL_SERVER_ERROR`、无错误码时的文案）
+  - [ ] 7.4 E2E 数据准备 `apps/web/e2e/support/persons.ts`：`resetPersons()`（只清空 `person` 表）、`seedPersons(rows)`（用 `pg` 插入，自带 `id`、`updatedAt`，可批量造数据、指定较早的更新时间）
+  - [ ] 7.5 E2E `apps/web/e2e/persons.spec.ts`（每个用例前 `resetPersons()`，先通过注册接口准备并登录用户）：
+    - 访问控制：未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都被重定向到 `/login`；未登录直接请求 `/trpc/person.list` 返回 401
+    - 导航与空状态：顶部导航「人员管理」进入 `/persons`；空库显示「暂无人员」和「新增人员」
+    - 新增：只填姓名、工号保存成功，toast「已保存」，回到列表且新人员在第一行，工号显示为大写，选填列显示 `-`，页面不含 `null` / `undefined`
+    - 校验：姓名为空、工号含中文 / 空格、手机号 10 位、邮箱 `a@b` 时无法提交并显示对应原因
+    - 工号冲突：新增已存在工号的小写形式提示「工号已存在」；编辑时把工号改成别人的工号提示「工号已存在」
+    - 编辑：打开编辑页回填数据；修改后保存，列表显示新数据，更新时间从预置的较早时间变为当前时间；「取消」不保存
+    - 删除：弹出确认对话框且文案含「姓名（工号）」；取消不删；确认后 toast「已删除」并从列表消失，刷新后仍不存在；第 2 页只有 1 条时删除后回到第 1 页
+    - 搜索 / 筛选 / 翻页：预置 21+ 条，按姓名片段、工号小写片段搜到目标；状态筛选「离职」只显示离职人员；搜索后回到第 1 页；显示「第 1 / 2 页，共 N 条」，下一页 / 上一页可用；无结果显示「没有找到匹配的人员」
+    - 已删除的人员：打开已删除人员的编辑页、编辑页打开后被删除再提交、列表打开后被删除再确认删除，都显示「该人员不存在或已被删除」，编辑页有「返回列表」，页面不崩溃
+    - 可访问性与布局：只用键盘（复用 `tabUntilFocused` / `pressUntilFocused`）完成新增、搜索、翻页、筛选、编辑和删除确认；亮色 / 暗色主题下 `/persons`、`/persons/new` 在 `NARROW_VIEWPORT` 下 `getScrollWidth(page) <= 375`，表格容器自身可横向滚动
+  - 对应验收标准：R04-AC1 ~ R04-AC16
+- [ ] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+  - 对应验收标准：R04-AC17
+- [ ] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 对应验收标准：R04-AC1 ~ R04-AC17
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
