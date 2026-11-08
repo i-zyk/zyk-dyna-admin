@@ -43,8 +43,10 @@
 - [ ] 7. 编写测试
   - [✅] 7.1 `packages/api` 单元测试 `lib/person-input.test.ts`：姓名空串 / 只有空格 / 51 个字符被拒，50 个字符通过且首尾空格被去掉；工号 `a`、33 位、`A 001`、`工号1`、`A_001` 被拒，` a-001 ` 归一化为 `A-001`；手机号 `1381234567`（10 位）、`12812345678`、`23812345678`、`138123456789` 被拒，`13812345678` 通过；邮箱 `abc`、`a@b` 被拒，` Tom@Example.COM ` 归一化为 `tom@example.com`；部门 / 职位 51 个字符、备注 501 个字符被拒；选填字段 `""`、`"  "`、`null`、`undefined` 都归一化为 `null`；状态缺省或不是 `ACTIVE` / `INACTIVE` 时被拒；`personListInputSchema` 的 `page` < 1、`pageSize` > 100 被拒，默认值为 1 / 20，`keyword` 只有空格视为无条件
     - 测试：`pnpm --dir packages/api run test`（4 个文件 96 个用例，含新增 `lib/person-input.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`、`pnpm run test`（api 96 个、web 132 个用例），通过（第 1 轮）
-  - [ ] 7.2 `packages/api` 路由测试 `routers/person.test.ts`（`appRouter.createCaller` + 注入假 `db.person`，抛 `@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError`）：`session: null` 时 5 个过程都抛 `UNAUTHORIZED` 且不访问数据库；`create` / `update` 传给 Prisma 的数据已归一化（工号大写、邮箱小写、空串转 `null`）；`P2002` → `CONFLICT`；`getById` 查不到、`update` / `delete` 抛 `P2025` → `NOT_FOUND`；其他错误 → `INTERNAL_SERVER_ERROR` 且不回显原始信息；`list` 的 `where`（姓名或工号 `insensitive`、状态）、`orderBy`、`skip` / `take` 与返回结构 `{ items, total, page, pageSize }` 正确；非法入参 `BAD_REQUEST` 且不访问数据库
-  - [ ] 7.3 `apps/web` 单元测试：`person-validation.test.ts`（与 7.1 同一组用例的前端结果，并断言前后端正则 `source` 一致、对同组用例结果一致；中文错误文案）；`person-format.test.ts`（`formatPersonDateTime` 输出 `YYYY-MM-DD HH:mm`、非法值返回 `-`；`displayPersonValue` 对 `null` / `undefined` / `""` 返回 `-`；`getTotalPages(0, 20) = 1`、`(20, 20) = 1`、`(21, 20) = 2`）；`person-errors.test.ts`（`CONFLICT`、`NOT_FOUND`、`INTERNAL_SERVER_ERROR`、无错误码时的文案）
+  - [✅] 7.2 `packages/api` 路由测试 `routers/person.test.ts`（`appRouter.createCaller` + 注入假 `db.person`，抛 `@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError`）：`session: null` 时 5 个过程都抛 `UNAUTHORIZED` 且不访问数据库；`create` / `update` 传给 Prisma 的数据已归一化（工号大写、邮箱小写、空串转 `null`）；`P2002` → `CONFLICT`；`getById` 查不到、`update` / `delete` 抛 `P2025` → `NOT_FOUND`；其他错误 → `INTERNAL_SERVER_ERROR` 且不回显原始信息；`list` 的 `where`（姓名或工号 `insensitive`、状态）、`orderBy`、`skip` / `take` 与返回结构 `{ items, total, page, pageSize }` 正确；非法入参 `BAD_REQUEST` 且不访问数据库
+    - 测试：`pnpm --dir packages/api run test`（5 个文件 130 个用例，含新增 `routers/person.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`，通过（第 1 轮）
+  - [✅] 7.3 `apps/web` 单元测试：`person-validation.test.ts`（与 7.1 同一组用例的前端结果，并断言前后端正则 `source` 一致、对同组用例结果一致；中文错误文案）；`person-format.test.ts`（`formatPersonDateTime` 输出 `YYYY-MM-DD HH:mm`、非法值返回 `-`；`displayPersonValue` 对 `null` / `undefined` / `""` 返回 `-`；`getTotalPages(0, 20) = 1`、`(20, 20) = 1`、`(21, 20) = 2`）；`person-errors.test.ts`（`CONFLICT`、`NOT_FOUND`、`INTERNAL_SERVER_ERROR`、无错误码时的文案）
+    - 测试：`pnpm --dir apps/web run test`（8 个文件 276 个用例，含新增 `person-validation.test.ts` / `person-format.test.ts` / `person-errors.test.ts` 共 144 个用例）、`pnpm --dir apps/web run check-types`、`biome check apps/web`，通过（第 1 轮）
   - [ ] 7.4 E2E 数据准备 `apps/web/e2e/support/persons.ts`：`resetPersons()`（只清空 `person` 表）、`seedPersons(rows)`（用 `pg` 插入，自带 `id`、`updatedAt`，可批量造数据、指定较早的更新时间）
   - [ ] 7.5 E2E `apps/web/e2e/persons.spec.ts`（每个用例前 `resetPersons()`，先通过注册接口准备并登录用户）：
     - 访问控制：未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都被重定向到 `/login`；未登录直接请求 `/trpc/person.list` 返回 401
@@ -65,3 +67,4 @@
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明只读沙箱下 Vitest 未运行，属环境说明而非缺陷，由 W6R 回归测试覆盖）
 - CR（2026-11-08）：Codex 提出 2 条，采纳 2 条；不采纳：无
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无
