@@ -20,6 +20,9 @@ export const PERSON_REMARK_MAX_LENGTH = 500;
 /** 列表每页条数（服务端 pageSize 上限为 100） */
 export const PERSON_LIST_PAGE_SIZE = 20;
 
+/** 列表搜索词的长度上限（与服务端 `PERSON_KEYWORD_MAX_LENGTH` 一致） */
+export const PERSON_KEYWORD_MAX_LENGTH = 100;
+
 /** 与 Prisma 的 `PersonStatus` 枚举一致 */
 export const PERSON_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 

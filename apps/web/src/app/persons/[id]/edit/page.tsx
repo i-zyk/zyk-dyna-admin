@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import PersonEdit from "@/components/person-edit";
 import { getServerSessionUser } from "@/lib/server-session";
 
 interface EditPersonPageProps {
@@ -23,6 +24,7 @@ export default async function EditPersonPage({ params }: EditPersonPageProps) {
 			data-person-id={id}
 		>
 			<h1 className="font-semibold text-lg">编辑人员</h1>
+			<PersonEdit id={id} />
 		</main>
 	);
 }

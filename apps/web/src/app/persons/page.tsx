@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import PersonList from "@/components/person-list";
 import { getServerSessionUser } from "@/lib/server-session";
 
 export default async function PersonsPage() {
@@ -13,6 +14,7 @@ export default async function PersonsPage() {
 	return (
 		<main className="mx-auto w-full min-w-0 max-w-5xl space-y-6 px-4 py-6">
 			<h1 className="font-semibold text-lg">人员管理</h1>
+			<PersonList />
 		</main>
 	);
 }
