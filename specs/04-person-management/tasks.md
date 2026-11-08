@@ -1,0 +1,76 @@
+# R04 人员管理（入库、修改、删除） - 任务清单
+
+> 完成一项后把 `- [ ]` 改为 `- [✅]`
+
+- [✅] 1. 新增 `person` 数据表与迁移
+  - 说明：新建 `packages/db/prisma/schema/person.prisma`（`Person` 模型、`PersonStatus` 枚举、`employeeNo @unique`、`@@index([updatedAt])`、`@@map("person")`，字段见 design.md「数据模型」）；执行 `pnpm run db:generate`，再执行 `pnpm run db:migrate -- --name add_person`（非交互，必须带 `--name`）；`packages/db/src/index.ts` 追加导出 `Prisma`、`PersonStatus`；确认 E2E `global-setup` 的清表逻辑会清空 `person` 表
+  - 对应验收标准：R04-AC15
+  - 测试：`pnpm run db:generate`、`prisma migrate status`、`prisma migrate diff --from-config-datasource --to-schema prisma/schema --exit-code`（开发库无差异）、测试库 `db:migrate:deploy` + 插入校验（`employeeNo` 唯一约束 23505、`status` 默认 `ACTIVE`）+ `resetTestDatabase()` 后 `person` 为 0 行、`turbo run check-types --force`（db / api / server）、`pnpm run check-types`、`pnpm run test`、`biome check packages/db`，通过（第 1 轮）
+- [✅] 2. 服务端入参 schema 与归一化
+  - 说明：新建 `packages/api/src/lib/person-input.ts`（只依赖 `zod`）：`EMPLOYEE_NO_PATTERN`、`PHONE_PATTERN`、长度常量；`personInputSchema`（trim、工号转大写、邮箱转小写、选填空串 / `null` / `undefined` 统一为 `null`）、`personListInputSchema`（`keyword?` trim 最多 100、`status?`、`page` ≥ 1 默认 1、`pageSize` 1–100 默认 20）、`personIdSchema`
+  - 对应验收标准：R04-AC4、R04-AC5、R04-AC6、R04-AC14
+  - 测试：`pnpm --dir packages/api run test`、`pnpm --dir packages/api run check-types`、`biome check packages/api`、临时脚本（tsx）按 7.1 用例校验 `personInputSchema` / `personListInputSchema` / `personIdInputSchema` / `personUpdateInputSchema` 的拒绝与归一化结果，通过（第 1 轮）
+- [✅] 3. `person` tRPC 子路由
+  - [✅] 3.1 新建 `packages/api/src/lib/prisma-errors.ts`：`isPrismaErrorCode(error, code)`（`@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError` 且 `code` 相等）
+  - [✅] 3.2 新建 `packages/api/src/routers/person.ts`：`list`（姓名或工号 `contains` + `mode: "insensitive"`、状态筛选、`updatedAt desc, id desc`、`skip` / `take`、`findMany` 与 `count` 并行，返回 `{ items, total, page, pageSize }`）、`getById`（查不到 → `NOT_FOUND`）、`create`、`update`（整体替换）、`delete`（物理删除，返回 `{ id }`），全部 `protectedProcedure`；`P2002` → `CONFLICT`、`P2025` → `NOT_FOUND`，其他错误 → `INTERNAL_SERVER_ERROR`，message 不回显数据库原始信息；验证 `contains` 对 `%` / `_` 是否已转义，未转义则手动转义
+  - [✅] 3.3 在 `packages/api/src/routers/index.ts` 合并 `person: personRouter`
+  - 对应验收标准：R04-AC1、R04-AC5、R04-AC6、R04-AC9、R04-AC10、R04-AC12、R04-AC13、R04-AC14
+  - 测试：`pnpm --dir packages/api run test`、`pnpm run test`、`pnpm --dir packages/api run check-types`、`pnpm --dir apps/server run check-types`、`pnpm --dir apps/web run check-types`、`biome check packages/api packages/db`、临时脚本（tsx + `appRouter.createCaller` 连测试库）校验未登录 5 个过程 `UNAUTHORIZED`、`create` 归一化、`P2002` → `CONFLICT`（新增 / 编辑）、`P2025` / 查不到 → `NOT_FOUND`、`%` / `_` 按字面匹配、工号不区分大小写搜索、状态筛选、分页与 `{ items, total, page, pageSize }`、`update` 整体替换、`delete` 返回 `{ id }`、非法入参 `BAD_REQUEST`，通过（第 1 轮）
+- [✅] 4. 添加 shadcn 组件
+  - 说明：执行 `npx shadcn@latest add table alert-dialog select -c packages/ui`，提示覆盖 `button.tsx` 时选择不覆盖；核对 `package.json` / `pnpm-lock.yaml` 没有新增依赖（有的话先暂停确认）
+  - 对应验收标准：R04-AC9、R04-AC12、R04-AC16
+  - 测试：`git diff -- '**/package.json' pnpm-lock.yaml`（无新增依赖，`button.tsx` 未被覆盖）、`pnpm --dir packages/ui run check-types`、`pnpm --dir apps/web run check-types`、`biome check packages/ui`、`pnpm run check-types`、`pnpm run test`，通过（第 1 轮）
+- [✅] 5. 前端工具函数
+  - 说明：新建 `apps/web/src/lib/person-validation.ts`（与后端同一组正则和长度常量、带中文文案的字段 schema、`PERSON_STATUS_OPTIONS`、`toPersonInput()`）、`apps/web/src/lib/person-format.ts`（`formatPersonDateTime()`、`displayPersonValue()`、`getTotalPages()`）、`apps/web/src/lib/person-errors.ts`（`CONFLICT` → 工号已存在、`NOT_FOUND` → 该人员不存在或已被删除、保存 / 删除 / 加载失败兜底文案）、`apps/web/src/lib/server-session.ts`（`getServerSessionUser()`，转发 `headers()`，网络异常 try / catch 返回 `null`）
+  - 对应验收标准：R04-AC4、R04-AC5、R04-AC9、R04-AC13
+  - 测试：`pnpm --dir apps/web run test`、`pnpm --dir apps/web run check-types`、`biome check apps/web/src/lib`、`pnpm run test`、临时脚本（tsx）校验前后端正则 `source` / 长度常量 / 状态一致，25 组用例下 `personFormSchema` 与服务端 `personInputSchema` 通过与否及归一化结果一致、`toPersonInput()` 与解析结果一致、中文错误文案、`toPersonFormValues()` 回填、`formatPersonDateTime` / `displayPersonValue` / `getTotalPages` 与 `person-errors` 文案，通过（第 1 轮）
+- [✅] 6. 页面与组件
+  - [✅] 6.1 路由与导航：新建 `apps/web/src/app/persons/page.tsx`、`persons/new/page.tsx`、`persons/[id]/edit/page.tsx`（Server Component，`getServerSessionUser()` 为空时在 try 之外 `redirect("/login")`；编辑页 `params` 为 Promise）；`header.tsx` 增加「人员管理」链接；检查 375px 下顶部导航不撑出横向滚动
+    - 对应验收标准：R04-AC1、R04-AC2、R04-AC16
+    - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（跑完已删除）校验未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都重定向到 `/login`，已登录点导航「人员管理」进入 `/persons`、三个页面标题正常、编辑页 `data-person-id` 为路由 id，375px 亮色 / 暗色下 `/persons`、`/persons/new`、`/persons/abc/edit`、`/dashboard` 页面无横向滚动且「人员管理」链接单行显示（长用户名由用户菜单截断），通过（第 1 轮）
+  - [✅] 6.2 新建 `apps/web/src/components/person-form.tsx`（新增 / 编辑共用：每个字段有 `<Label htmlFor>`，状态用 `Select` 默认在职，备注用 `Textarea`；字段级实时校验，错误显示在字段下方并设置 `aria-invalid` / `aria-describedby`；服务端 `CONFLICT` 显示在工号字段下「工号已存在」；提交中按钮加载并禁用；「取消」回 `/persons`）和 `person-create.tsx`（`person.create`，成功后让 `person.list` 失效、toast「已保存」、回列表），挂到 `/persons/new`
+    - 对应验收标准：R04-AC3、R04-AC4、R04-AC5、R04-AC7、R04-AC8、R04-AC16
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（12 个，跑完已删除）校验 `/persons/new` 每个字段可按 `<label>` 定位、姓名 / 工号 `aria-required`、状态默认在职、备注为 textarea；只填必填项保存后 toast「已保存」、回到 `/persons`，库中工号大写、选填为 `null`、状态 `ACTIVE`；全字段（含键盘选「离职」、邮箱大小写与空格）归一化入库；姓名空格 / 超长、工号中文 / 含空格、手机号 10 位、邮箱 `a@b`、部门 / 职位 / 备注超长时字段下方显示对应原因并设置 `aria-invalid` / `aria-describedby`，按钮禁用且不发请求；空表单提交显示「请输入姓名」「请输入工号」且不发请求；已存在 `A001` 时提交 `a001` 在工号字段下显示「工号已存在」、无全局 toast，改工号后错误清除并可保存；提交中按钮禁用并显示「保存中…」，重复点击 / 回车只发 1 次请求；服务端 500 时 toast「保存失败，请稍后再试」、不回显原始信息、按钮恢复；「取消」回列表且不入库；只用键盘完成新增；375px 亮色 / 暗色下带错误提示的 `/persons/new` 无横向滚动，通过（第 1 轮）
+  - [✅] 6.3 新建 `apps/web/src/components/person-edit.tsx`：`person.getById`（`retry: false`、`meta.skipGlobalErrorToast`）回填表单，加载中显示骨架屏；`NOT_FOUND` 显示「该人员不存在或已被删除」+「返回列表」；`person.update` 成功后让 `person.list` 和该 `getById` 失效、toast「已保存」、回列表；提交时 `NOT_FOUND` 切换为不存在提示；挂到 `/persons/[id]/edit`
+    - 对应验收标准：R04-AC5、R04-AC7、R04-AC8、R04-AC13
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（10 个，跑完已删除）校验 `getById` 未返回前显示 `role="status"`「正在加载」骨架屏，返回后全部字段（含状态「离职」、备注）回填；修改后保存 toast「已保存」、回到 `/persons`，库中姓名 trim、工号大写、邮箱小写、清空的部门为 `null`、`updatedAt` 晚于预置时间，再打开（含浏览器后退的客户端导航）显示新数据；键盘 / 鼠标改状态为在职入库；不存在的 id 和 80 个字符的 id 显示「该人员不存在或已被删除」、不渲染表单、无全局 toast，「返回列表」回到 `/persons`；工号改成他人工号的小写形式时工号字段下显示「工号已存在」并 `aria-invalid`、不入库，改回自己工号后可保存；打开后在库中删除再提交切换为不存在提示 + 「返回列表」、无 toast；`getById` 500 时页面内显示「加载失败，请稍后再试」、不回显原始信息，「重试」后回填；`update` 500 时 toast「保存失败，请稍后再试」、不回显原始信息、按钮恢复、停留编辑页；回车 + 重复点击只发 1 次 `person.update`；「取消」回列表且不入库；375px 亮色 / 暗色下编辑页和不存在提示页无横向滚动，通过（第 1 轮）
+  - [✅] 6.4 新建 `apps/web/src/components/person-list.tsx`：带 `<Label>` 的搜索框 +「搜索」按钮（`<form>` 提交，回车可用，搜索后回第 1 页）、状态 `Select`（全部 / 在职 / 离职，切换后回第 1 页）、「新增人员」按钮；`Table` 列为工号、姓名、部门、职位、手机号、状态、更新时间、操作（编辑链接 / 删除按钮），外层 `overflow-x-auto`；空值显示 `-`，更新时间 `YYYY-MM-DD HH:mm`；「上一页」/「下一页」+「第 X / Y 页，共 N 条」，首末页禁用对应按钮；`keepPreviousData`；页码越界自动回退；空状态「暂无人员」+「新增人员」与无结果「没有找到匹配的人员」；加载失败页面内提示
+    - 对应验收标准：R04-AC2、R04-AC9、R04-AC10、R04-AC11、R04-AC16
+    - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（10 个，跑完已删除）校验空库显示「暂无人员」+「新增人员」（可进入 `/persons/new`）且无分页条；表头为工号、姓名、部门、职位、手机号、状态、更新时间、操作，按更新时间倒序，空值显示 `-`，更新时间为本地时区 `YYYY-MM-DD HH:mm`，页面不含 `null` / `undefined`，「编辑」链接可访问名称为「编辑 姓名（工号）」并进入对应编辑页；预置 23 条时显示「第 1 / 2 页，共 23 条」，首页「上一页」、末页「下一页」`aria-disabled`，翻页正常；按姓名片段（「搜索」按钮）、工号小写片段（回车，前后空格被 trim）搜索，第 2 页搜索后回到第 1 页，无结果显示「没有找到匹配的人员」且无分页条，清空关键词恢复全部；状态筛选「离职」只显示离职、切换后回第 1 页，在职 / 全部计数正确；第 2 页数据在库中被删后翻到第 2 页自动回退为「第 1 / 1 页，共 20 条」；`person.list` 500 时页面内 `role="alert"`「加载失败，请稍后再试」、不回显原始信息、无全局 toast，「重试」后恢复；只用键盘完成搜索、翻页（翻页后焦点留在按钮上）、状态筛选和进入编辑；375px 亮色 / 暗色下 `/persons`（含无结果状态）无横向滚动，表格容器 `overflow-x: auto` 且自身可横向滚动，通过（第 1 轮）
+  - [✅] 6.5 新建 `apps/web/src/components/person-delete-dialog.tsx`：`AlertDialog` 文案「确定删除人员「姓名（工号）」吗？删除后无法恢复。」，取消 / Esc 不删除；确认按钮在请求中禁用；成功 toast「已删除」，`NOT_FOUND` toast「该人员不存在或已被删除」，两种情况都让 `person.list` 失效（当前页删空由 6.4 的越界回退处理）；在列表每行接入
+    - 对应验收标准：R04-AC12、R04-AC13、R04-AC16
+    - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（9 个，跑完已删除）校验「删除」按钮可访问名称为「删除 姓名（工号）」，对话框文案「确定删除人员「张三（A001）」吗？删除后无法恢复。」；「取消」和 Esc 关闭对话框且不删除；确认后 toast「已删除」、对话框关闭、该行从列表消失且计数更新，刷新后仍不存在、库中已删除；请求进行中确认按钮显示「删除中…」并 `aria-disabled`、「取消」禁用、Esc 不关闭，重复点击 / 回车只发 1 次 `person.delete`，删光后显示「暂无人员」；列表打开后在库中删除再确认，toast「该人员不存在或已被删除」、对话框关闭、列表刷新且无「已删除」；`person.delete` 500 时 toast「删除失败，请稍后再试」、不回显原始信息、对话框保留且确认按钮恢复、可取消；第 2 页只有 1 条时删除后回到「第 1 / 1 页，共 20 条」；只用键盘（Tab / Enter）打开对话框并确认删除；375px 亮色 / 暗色下打开长姓名 / 长工号的删除对话框，对话框不超出视口且页面无横向滚动，通过（第 1 轮）
+- [✅] 7. 编写测试
+  - [✅] 7.1 `packages/api` 单元测试 `lib/person-input.test.ts`：姓名空串 / 只有空格 / 51 个字符被拒，50 个字符通过且首尾空格被去掉；工号 `a`、33 位、`A 001`、`工号1`、`A_001` 被拒，` a-001 ` 归一化为 `A-001`；手机号 `1381234567`（10 位）、`12812345678`、`23812345678`、`138123456789` 被拒，`13812345678` 通过；邮箱 `abc`、`a@b` 被拒，` Tom@Example.COM ` 归一化为 `tom@example.com`；部门 / 职位 51 个字符、备注 501 个字符被拒；选填字段 `""`、`"  "`、`null`、`undefined` 都归一化为 `null`；状态缺省或不是 `ACTIVE` / `INACTIVE` 时被拒；`personListInputSchema` 的 `page` < 1、`pageSize` > 100 被拒，默认值为 1 / 20，`keyword` 只有空格视为无条件
+    - 测试：`pnpm --dir packages/api run test`（4 个文件 96 个用例，含新增 `lib/person-input.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`、`pnpm run test`（api 96 个、web 132 个用例），通过（第 1 轮）
+  - [✅] 7.2 `packages/api` 路由测试 `routers/person.test.ts`（`appRouter.createCaller` + 注入假 `db.person`，抛 `@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError`）：`session: null` 时 5 个过程都抛 `UNAUTHORIZED` 且不访问数据库；`create` / `update` 传给 Prisma 的数据已归一化（工号大写、邮箱小写、空串转 `null`）；`P2002` → `CONFLICT`；`getById` 查不到、`update` / `delete` 抛 `P2025` → `NOT_FOUND`；其他错误 → `INTERNAL_SERVER_ERROR` 且不回显原始信息；`list` 的 `where`（姓名或工号 `insensitive`、状态）、`orderBy`、`skip` / `take` 与返回结构 `{ items, total, page, pageSize }` 正确；非法入参 `BAD_REQUEST` 且不访问数据库
+    - 测试：`pnpm --dir packages/api run test`（5 个文件 130 个用例，含新增 `routers/person.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`，通过（第 1 轮）
+  - [✅] 7.3 `apps/web` 单元测试：`person-validation.test.ts`（与 7.1 同一组用例的前端结果，并断言前后端正则 `source` 一致、对同组用例结果一致；中文错误文案）；`person-format.test.ts`（`formatPersonDateTime` 输出 `YYYY-MM-DD HH:mm`、非法值返回 `-`；`displayPersonValue` 对 `null` / `undefined` / `""` 返回 `-`；`getTotalPages(0, 20) = 1`、`(20, 20) = 1`、`(21, 20) = 2`）；`person-errors.test.ts`（`CONFLICT`、`NOT_FOUND`、`INTERNAL_SERVER_ERROR`、无错误码时的文案）
+    - 测试：`pnpm --dir apps/web run test`（8 个文件 276 个用例，含新增 `person-validation.test.ts` / `person-format.test.ts` / `person-errors.test.ts` 共 144 个用例）、`pnpm --dir apps/web run check-types`、`biome check apps/web`，通过（第 1 轮）
+  - [✅] 7.4 E2E 数据准备 `apps/web/e2e/support/persons.ts`：`resetPersons()`（只清空 `person` 表）、`seedPersons(rows)`（用 `pg` 插入，自带 `id`、`updatedAt`，可批量造数据、指定较早的更新时间）
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（3 个，跑完已删除）校验 `seedPersons` 缺省 `id` 为 `e2e-` 前缀、`status` 为 `ACTIVE`、选填为 `null`、`createdAt` 等于 `updatedAt`，自定义字段原样入库且返回值与 `findPersonByEmployeeNo()` 读回一致，指定的 `updatedAt` 在库中按 UTC 存储（与 Prisma 一致）；空数组不写库；`buildPersonSeeds(23)` 姓名 / 工号补零、`overrides` 生效；`countPersons()` / `deletePersonById()` 正确；`resetPersons()` 只清空 `person` 表、不影响 `user` 表；登录后 `/persons` 按入参顺序显示预置数据，「第 1 / 2 页，共 22 条」，缺省与指定较早的更新时间都按本地时区显示、无偏移，通过（第 1 轮）
+  - [✅] 7.5 E2E `apps/web/e2e/persons.spec.ts`（每个用例前 `resetPersons()`，先通过注册接口准备并登录用户）：
+    - 访问控制：未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都被重定向到 `/login`；未登录直接请求 `/trpc/person.list` 返回 401
+    - 导航与空状态：顶部导航「人员管理」进入 `/persons`；空库显示「暂无人员」和「新增人员」
+    - 新增：只填姓名、工号保存成功，toast「已保存」，回到列表且新人员在第一行，工号显示为大写，选填列显示 `-`，页面不含 `null` / `undefined`
+    - 校验：姓名为空、工号含中文 / 空格、手机号 10 位、邮箱 `a@b` 时无法提交并显示对应原因
+    - 工号冲突：新增已存在工号的小写形式提示「工号已存在」；编辑时把工号改成别人的工号提示「工号已存在」
+    - 编辑：打开编辑页回填数据；修改后保存，列表显示新数据，更新时间从预置的较早时间变为当前时间；「取消」不保存
+    - 删除：弹出确认对话框且文案含「姓名（工号）」；取消不删；确认后 toast「已删除」并从列表消失，刷新后仍不存在；第 2 页只有 1 条时删除后回到第 1 页
+    - 搜索 / 筛选 / 翻页：预置 21+ 条，按姓名片段、工号小写片段搜到目标；状态筛选「离职」只显示离职人员；搜索后回到第 1 页；显示「第 1 / 2 页，共 N 条」，下一页 / 上一页可用；无结果显示「没有找到匹配的人员」
+    - 已删除的人员：打开已删除人员的编辑页、编辑页打开后被删除再提交、列表打开后被删除再确认删除，都显示「该人员不存在或已被删除」，编辑页有「返回列表」，页面不崩溃
+    - 可访问性与布局：只用键盘（复用 `tabUntilFocused` / `pressUntilFocused`）完成新增、搜索、翻页、筛选、编辑和删除确认；亮色 / 暗色主题下 `/persons`、`/persons/new` 在 `NARROW_VIEWPORT` 下 `getScrollWidth(page) <= 375`，表格容器自身可横向滚动
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（66 个用例全部通过，含新增 `persons.spec.ts` 21 个用例），通过（第 1 轮）
+  - 对应验收标准：R04-AC1 ~ R04-AC16
+- [✅] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+  - 对应验收标准：R04-AC17
+  - 测试：`pnpm run db:generate`、`pnpm run check`（ultracite，183 个文件无问题，无需修复）、`next typegen`、`pnpm run check-types --force`（7 个包全部通过）、`pnpm run test --force`（api 5 个文件 130 个用例、web 8 个文件 276 个用例通过），通过（第 1 轮）
+- [✅] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 对应验收标准：R04-AC1 ~ R04-AC17
+  - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`（66 个文件无问题）、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（67 个用例全部通过，含 `persons.spec.ts` 22 个，新增保存中加载 / 防重复提交用例及姓名 / 部门 / 职位 / 备注超长校验），通过（第 1 轮）
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明只读沙箱下 Vitest 未运行，属环境说明而非缺陷，由 W6R 回归测试覆盖）
+- CR（2026-11-08）：Codex 提出 2 条，采纳 2 条；不采纳：无
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明受只读环境限制未重跑 E2E，属环境说明而非缺陷，由 W6R 回归测试覆盖）
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明受只读沙箱限制未运行完整 E2E，属环境说明而非缺陷，由 W6R 回归测试覆盖）

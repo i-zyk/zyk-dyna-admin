@@ -1,0 +1,21 @@
+enum PersonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Person {
+  id         String       @id @default(cuid())
+  name       String       @db.VarChar(50)
+  employeeNo String       @unique @db.VarChar(32)
+  phone      String?      @db.VarChar(11)
+  email      String?      @db.VarChar(254)
+  department String?      @db.VarChar(50)
+  position   String?      @db.VarChar(50)
+  status     PersonStatus @default(ACTIVE)
+  remark     String?      @db.VarChar(500)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([updatedAt])
+  @@map("person")
+}

@@ -8,6 +8,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Sign in** with either username or email + password, and **sign out** from the header user menu
 - **Protected dashboard**: visiting `/dashboard` while signed out redirects to `/login`; visiting `/login` while signed in redirects to `/dashboard`
 - **GitHub user lookup** on `/dashboard`: enter a GitHub username to see the public profile (avatar, name, bio, company, location, blog, followers / following, public repos), with clear messages for invalid usernames, users not found, rate limits and upstream errors
+- **Person management** on `/persons` (header link「人员管理」, sign-in required): add, edit and delete people (name, employee number, phone, email, department, position, active / inactive status, remark). The list searches by name or employee number (case-insensitive), filters by status and pages 20 rows at a time. Employee numbers are stored upper-case and must be unique; deleting asks for confirmation and removes the record permanently. Every signed-in user can manage all people (no roles yet).
 
 Requirements and acceptance criteria live in [`docs/需求.md`](docs/需求.md) and [`specs/`](specs/README.md).
 
@@ -155,6 +156,10 @@ zyk-dyna-admin/
 - `pnpm run fix`: Auto-fix Biome formatting and lint issues
 - `pnpm run test`: Run unit / integration tests (Vitest)
 - `pnpm run test:e2e`: Run Web end-to-end tests (Playwright)
+
+## Deployment (Cloudflare, work in progress)
+
+`apps/web` includes OpenNext for Cloudflare config (`open-next.config.ts`, `wrangler.jsonc`, with `@opennextjs/cloudflare` and `wrangler` installed). Build output goes to `.open-next/` and `.wrangler/`, both git-ignored. No build / preview / deploy scripts have been added yet.
 
 ## Better Auth Schema Generation
 

@@ -25,15 +25,16 @@
 zyk-dyna-admin/
 ├── apps/
 │   ├── web/                     # Web 管理端 Next.js，端口 3001
-│   │   ├── src/app/             #   App Router：page.tsx / login/（已登录 redirect 到 /dashboard）/ dashboard/（服务端校验 session，未登录 redirect，含 GitHub 用户查询）
-│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单、user-menu、github-user-search / github-user-card 等
+│   │   ├── src/app/             #   App Router：page.tsx / login/（已登录 redirect 到 /dashboard）/ dashboard/（服务端校验 session，未登录 redirect，含 GitHub 用户查询）/ persons/、persons/new、persons/[id]/edit（人员管理，每个 page 用 getServerSessionUser() 校验登录）
+│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单、user-menu、github-user-search / github-user-card、person-list / person-form / person-create / person-edit / person-delete-dialog 等
 │   │   ├── src/lib/auth-client.ts   # better-auth/react 客户端（含 usernameClient）
-│   │   ├── src/lib/             #   auth-validation / auth-errors（表单校验、错误码映射）、github-*（用户名校验、资料格式化、错误文案），旁边是 *.test.ts
-│   │   ├── e2e/                 #   Playwright 用例 *.spec.ts；global-setup 迁移并清空测试库，support/ 放公共 helper
+│   │   ├── src/lib/             #   auth-validation / auth-errors（表单校验、错误码映射）、github-*（用户名校验、资料格式化、错误文案）、person-*（人员表单校验、列表格式化、错误文案）、server-session（Server Component 取登录用户）、trpc-errors（取 tRPC 错误码），旁边是 *.test.ts
+│   │   ├── e2e/                 #   Playwright 用例 *.spec.ts；global-setup 迁移并清空测试库，support/ 放公共 helper（page-helpers 键盘 / 窄屏、persons 人员数据准备等）
 │   │   ├── playwright.config.ts #   webServer 启动 server :3000（连测试库）和 web :3001
 │   │   ├── src/utils/trpc.ts    #   tRPC 客户端 + QueryClient（全局错误 toast，credentials: include）
 │   │   ├── src/env.ts           #   Varlock 自动生成，勿手改
 │   │   ├── next.config.ts       #   varlockNextConfigPlugin 包裹
+│   │   ├── open-next.config.ts / wrangler.jsonc  # Cloudflare（OpenNext）部署配置，产物在 .open-next/（已 gitignore）；尚未配置部署脚本
 │   │   └── AGENTS.md            #   Next.js 自动生成的 agent 规则（新版 Next，写代码前查 node_modules/next/dist/docs）
 │   ├── native/                  # 移动端 Expo（scheme: zyk-dyna-admin）
 │   │   ├── app/                 #   Expo Router：_layout.tsx → (drawer)/(tabs)/、modal.tsx、+not-found.tsx
@@ -58,14 +59,15 @@ zyk-dyna-admin/
 │   │       ├── index.ts         #   initTRPC、router、publicProcedure、protectedProcedure（无 session 抛 UNAUTHORIZED）
 │   │       ├── context.ts       #   Context 类型 { session, db, github }
 │   │       ├── lib/github.ts    #   createGithubClient(config) 工厂：调 GitHub REST API，抛带 kind 的 GithubApiError
-│   │       └── routers/         #   index.ts：appRouter（healthCheck、privateData、github），导出 AppRouter 类型；github.ts：github.getUser
+│   │       ├── lib/             #   person-input（人员入参 Zod schema 与归一化）、prisma-errors（P2002 / P2025 识别）、prisma-like（escapeLikePattern）
+│   │       └── routers/         #   index.ts：appRouter（healthCheck、privateData、github、person），导出 AppRouter 类型；github.ts：github.getUser；person.ts：person.list / getById / create / update / delete
 │   ├── auth/                    # @zyk-dyna-admin/auth：createAuth(env, db) 工厂 + Session 类型
 │   ├── db/                      # @zyk-dyna-admin/db：Prisma
-│   │   ├── prisma/schema/       #   多文件 schema：schema.prisma（generator/datasource）、auth.prisma（Better Auth 表）
+│   │   ├── prisma/schema/       #   多文件 schema：schema.prisma（generator/datasource）、auth.prisma（Better Auth 表）、person.prisma（人员表 Person + PersonStatus 枚举）
 │   │   ├── prisma/migrations/
 │   │   ├── prisma/generated/    #   prisma generate 输出（已 gitignore）
 │   │   ├── prisma.config.ts     #   Prisma 7 配置，DATABASE_URL 由 Varlock 加载
-│   │   └── src/index.ts         #   createPrismaClient(env) 工厂 + Database 类型
+│   │   └── src/index.ts         #   createPrismaClient(env) 工厂 + Database 类型，另导出 Person / Prisma 类型、PersonStatus、PrismaClientKnownRequestError
 │   ├── ui/                      # @zyk-dyna-admin/ui：共享 shadcn/ui 组件（仅 Web 使用）
 │   │   └── src/{components,hooks,lib,styles/globals.css}
 │   └── config/                  # @zyk-dyna-admin/config：tsconfig.base.json
@@ -293,3 +295,5 @@ Most formatting and common issues are automatically fixed by Biome. Run `pnpm ex
 - [2026-11-06][R02] Server Component 里用 `authClient.getSession` 判断登录态时，必须通过 `fetchOptions.headers: await headers()` 转发请求头（带上 cookie），否则永远拿不到 session；不传 `throw` 只能把 HTTP 错误响应变成 `{ error }`，连接被拒、DNS 失败等网络异常仍会 reject，要按未登录处理就得再用 try / catch 捕获（`redirect` 靠抛异常跳转，要放在 try 之外）
 - [2026-11-06][R02] E2E 的键盘导航（`tabUntilFocused` / `pressUntilFocused`）、窄屏视口 `NARROW_VIEWPORT`、`getScrollWidth` 已抽到 `apps/web/e2e/support/page-helpers.ts`；新写 E2E 直接复用，不要在 spec 里重复实现
 - [2026-11-07][R03] 访问真实外部服务（如 GitHub API）的冒烟测试命名为 `*.smoke.ts`，用单独的 `vitest.smoke.config.ts` + `test:smoke` 脚本手动执行；默认 `vitest run` 只匹配 `*.test.ts`，不会把它带进 `pnpm run test` / turbo 流水线，避免消耗额度和依赖网络
+- [2026-11-07][R04] Prisma 7（`@prisma/adapter-pg`）的 `contains` / `startsWith` 不会转义 `%`、`_`、`\`，关键词按通配符匹配；模糊搜索前先用 `packages/api/src/lib/prisma-like.ts` 的 `escapeLikePattern()` 转义
+- [2026-11-08][R04] Prisma 把 DateTime 按 UTC 存进不带时区的 `timestamp(3)`，而 `pg` 直接写 `Date` 会按本机时区序列化，导致页面显示时间偏移；E2E 用 `pg` 造数据时把时间转成 ISO 字符串经 `::timestamptz AT TIME ZONE 'UTC'` 写入，读取同样换算回 UTC（见 `apps/web/e2e/support/persons.ts`）
