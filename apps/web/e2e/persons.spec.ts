@@ -338,6 +338,16 @@ test.describe("已登录", () => {
 		await expect(toast(page, "已保存")).toBeVisible();
 		await expect(page).toHaveURL(PERSONS_URL);
 		await expect(list.rows).toHaveCount(2);
+		await expect(page.getByRole("columnheader")).toHaveText([
+			"工号",
+			"姓名",
+			"部门",
+			"职位",
+			"手机号",
+			"状态",
+			"更新时间",
+			"操作",
+		]);
 		await expectRowCells(list.rows.first(), [
 			"C-003",
 			"王五",
@@ -362,7 +372,7 @@ test.describe("已登录", () => {
 		});
 	});
 
-	test("姓名为空、工号含中文 / 空格、手机号 10 位、邮箱 a@b 时显示原因且无法提交", async ({
+	test("姓名为空 / 超长、工号含中文 / 空格、手机号 10 位、邮箱 a@b、部门 / 职位 / 备注超长时显示原因且无法提交", async ({
 		page,
 	}) => {
 		const createRequests = trackCreateRequests(page);
@@ -381,6 +391,13 @@ test.describe("已登录", () => {
 				message: "请输入姓名",
 				valid: "王五",
 				value: "   ",
+			},
+			{
+				field: form.name,
+				id: "name",
+				message: "姓名不能超过 50 个字符",
+				valid: "王五",
+				value: "王".repeat(51),
 			},
 			{
 				field: form.employeeNo,
@@ -410,6 +427,27 @@ test.describe("已登录", () => {
 				valid: "",
 				value: "a@b",
 			},
+			{
+				field: form.department,
+				id: "department",
+				message: "部门不能超过 50 个字符",
+				valid: "",
+				value: "部".repeat(51),
+			},
+			{
+				field: form.position,
+				id: "position",
+				message: "职位不能超过 50 个字符",
+				valid: "",
+				value: "职".repeat(51),
+			},
+			{
+				field: form.remark,
+				id: "remark",
+				message: "备注不能超过 500 个字符",
+				valid: "",
+				value: "备".repeat(501),
+			},
 		] as const;
 		// 先把其余字段填成合法值，只让当前字段不合法
 		await form.name.fill("王五");
@@ -430,6 +468,46 @@ test.describe("已登录", () => {
 		await expect(page).toHaveURL(NEW_PERSON_URL);
 		expect(createRequests.count).toBe(0);
 		expect(await countPersons()).toBe(0);
+	});
+
+	test("保存请求进行中时按钮显示「保存中…」并禁用，重复点击 / 回车只发 1 次请求", async ({
+		page,
+	}) => {
+		const createRequests = trackCreateRequests(page);
+		// 先挂起 person.create，等断言完加载状态再放行
+		let releaseCreate: () => void = () => undefined;
+		const createReleased = new Promise<void>((resolve) => {
+			releaseCreate = resolve;
+		});
+		await page.route(CREATE_REQUEST_URL, async (route) => {
+			await createReleased;
+			await route.continue();
+		});
+
+		await page.goto("/persons/new");
+		const form = getForm(page);
+		await form.name.fill("王五");
+		await form.employeeNo.fill("C003");
+		await form.submit.click();
+
+		const busyButton = page.getByRole("button", {
+			exact: true,
+			name: "保存中…",
+		});
+		await expect(busyButton).toBeDisabled();
+		await expect(busyButton).toHaveAttribute("aria-busy", "true");
+		await expect.poll(() => createRequests.count).toBe(1);
+
+		// 加载中再次点击和回车都不应发出第二次请求
+		await busyButton.click({ force: true });
+		await form.name.press("Enter");
+		expect(createRequests.count).toBe(1);
+
+		releaseCreate();
+		await expect(toast(page, "已保存")).toBeVisible();
+		await expect(page).toHaveURL(PERSONS_URL);
+		expect(createRequests.count).toBe(1);
+		expect(await countPersons()).toBe(1);
 	});
 
 	test("新增已存在工号的小写形式时，工号字段下提示「工号已存在」", async ({

@@ -9,7 +9,7 @@
 | R01 | [用户名 + 邮箱注册](01-username-sign-up/requirements.md) | 无 | - [✅] |
 | R02 | [用户名或邮箱登录 / 退出登录](02-sign-in-sign-out/requirements.md) | R01 | - [✅] |
 | R03 | [GitHub 用户查询](03-github-user-search/requirements.md) | R01、R02 | - [✅] |
-| R04 | [人员管理（入库、修改、删除）](04-person-management/requirements.md) | R01、R02 | - [ ] |
+| R04 | [人员管理（入库、修改、删除）](04-person-management/requirements.md) | R01、R02 | - [✅] |
 
 ## 建议开发顺序
 

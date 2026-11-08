@@ -62,12 +62,15 @@
     - 可访问性与布局：只用键盘（复用 `tabUntilFocused` / `pressUntilFocused`）完成新增、搜索、翻页、筛选、编辑和删除确认；亮色 / 暗色主题下 `/persons`、`/persons/new` 在 `NARROW_VIEWPORT` 下 `getScrollWidth(page) <= 375`，表格容器自身可横向滚动
     - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（66 个用例全部通过，含新增 `persons.spec.ts` 21 个用例），通过（第 1 轮）
   - 对应验收标准：R04-AC1 ~ R04-AC16
-- [ ] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
+- [✅] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R04-AC17
-- [ ] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
+  - 测试：`pnpm run db:generate`、`pnpm run check`（ultracite，183 个文件无问题，无需修复）、`next typegen`、`pnpm run check-types --force`（7 个包全部通过）、`pnpm run test --force`（api 5 个文件 130 个用例、web 8 个文件 276 个用例通过），通过（第 1 轮）
+- [✅] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R04-AC1 ~ R04-AC17
+  - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`（66 个文件无问题）、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（67 个用例全部通过，含 `persons.spec.ts` 22 个，新增保存中加载 / 防重复提交用例及姓名 / 部门 / 职位 / 备注超长校验），通过（第 1 轮）
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明只读沙箱下 Vitest 未运行，属环境说明而非缺陷，由 W6R 回归测试覆盖）
 - CR（2026-11-08）：Codex 提出 2 条，采纳 2 条；不采纳：无
 - CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无
 - CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明受只读环境限制未重跑 E2E，属环境说明而非缺陷，由 W6R 回归测试覆盖）
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明受只读沙箱限制未运行完整 E2E，属环境说明而非缺陷，由 W6R 回归测试覆盖）
