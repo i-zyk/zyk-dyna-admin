@@ -20,14 +20,17 @@
   - 说明：执行 `npx shadcn@latest add table alert-dialog select -c packages/ui`，提示覆盖 `button.tsx` 时选择不覆盖；核对 `package.json` / `pnpm-lock.yaml` 没有新增依赖（有的话先暂停确认）
   - 对应验收标准：R04-AC9、R04-AC12、R04-AC16
   - 测试：`git diff -- '**/package.json' pnpm-lock.yaml`（无新增依赖，`button.tsx` 未被覆盖）、`pnpm --dir packages/ui run check-types`、`pnpm --dir apps/web run check-types`、`biome check packages/ui`、`pnpm run check-types`、`pnpm run test`，通过（第 1 轮）
-- [ ] 5. 前端工具函数
+- [✅] 5. 前端工具函数
   - 说明：新建 `apps/web/src/lib/person-validation.ts`（与后端同一组正则和长度常量、带中文文案的字段 schema、`PERSON_STATUS_OPTIONS`、`toPersonInput()`）、`apps/web/src/lib/person-format.ts`（`formatPersonDateTime()`、`displayPersonValue()`、`getTotalPages()`）、`apps/web/src/lib/person-errors.ts`（`CONFLICT` → 工号已存在、`NOT_FOUND` → 该人员不存在或已被删除、保存 / 删除 / 加载失败兜底文案）、`apps/web/src/lib/server-session.ts`（`getServerSessionUser()`，转发 `headers()`，网络异常 try / catch 返回 `null`）
   - 对应验收标准：R04-AC4、R04-AC5、R04-AC9、R04-AC13
+  - 测试：`pnpm --dir apps/web run test`、`pnpm --dir apps/web run check-types`、`biome check apps/web/src/lib`、`pnpm run test`、临时脚本（tsx）校验前后端正则 `source` / 长度常量 / 状态一致，25 组用例下 `personFormSchema` 与服务端 `personInputSchema` 通过与否及归一化结果一致、`toPersonInput()` 与解析结果一致、中文错误文案、`toPersonFormValues()` 回填、`formatPersonDateTime` / `displayPersonValue` / `getTotalPages` 与 `person-errors` 文案，通过（第 1 轮）
 - [ ] 6. 页面与组件
-  - [ ] 6.1 路由与导航：新建 `apps/web/src/app/persons/page.tsx`、`persons/new/page.tsx`、`persons/[id]/edit/page.tsx`（Server Component，`getServerSessionUser()` 为空时在 try 之外 `redirect("/login")`；编辑页 `params` 为 Promise）；`header.tsx` 增加「人员管理」链接；检查 375px 下顶部导航不撑出横向滚动
+  - [✅] 6.1 路由与导航：新建 `apps/web/src/app/persons/page.tsx`、`persons/new/page.tsx`、`persons/[id]/edit/page.tsx`（Server Component，`getServerSessionUser()` 为空时在 try 之外 `redirect("/login")`；编辑页 `params` 为 Promise）；`header.tsx` 增加「人员管理」链接；检查 375px 下顶部导航不撑出横向滚动
     - 对应验收标准：R04-AC1、R04-AC2、R04-AC16
-  - [ ] 6.2 新建 `apps/web/src/components/person-form.tsx`（新增 / 编辑共用：每个字段有 `<Label htmlFor>`，状态用 `Select` 默认在职，备注用 `Textarea`；字段级实时校验，错误显示在字段下方并设置 `aria-invalid` / `aria-describedby`；服务端 `CONFLICT` 显示在工号字段下「工号已存在」；提交中按钮加载并禁用；「取消」回 `/persons`）和 `person-create.tsx`（`person.create`，成功后让 `person.list` 失效、toast「已保存」、回列表），挂到 `/persons/new`
+    - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（跑完已删除）校验未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都重定向到 `/login`，已登录点导航「人员管理」进入 `/persons`、三个页面标题正常、编辑页 `data-person-id` 为路由 id，375px 亮色 / 暗色下 `/persons`、`/persons/new`、`/persons/abc/edit`、`/dashboard` 页面无横向滚动且「人员管理」链接单行显示（长用户名由用户菜单截断），通过（第 1 轮）
+  - [✅] 6.2 新建 `apps/web/src/components/person-form.tsx`（新增 / 编辑共用：每个字段有 `<Label htmlFor>`，状态用 `Select` 默认在职，备注用 `Textarea`；字段级实时校验，错误显示在字段下方并设置 `aria-invalid` / `aria-describedby`；服务端 `CONFLICT` 显示在工号字段下「工号已存在」；提交中按钮加载并禁用；「取消」回 `/persons`）和 `person-create.tsx`（`person.create`，成功后让 `person.list` 失效、toast「已保存」、回列表），挂到 `/persons/new`
     - 对应验收标准：R04-AC3、R04-AC4、R04-AC5、R04-AC7、R04-AC8、R04-AC16
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（12 个，跑完已删除）校验 `/persons/new` 每个字段可按 `<label>` 定位、姓名 / 工号 `aria-required`、状态默认在职、备注为 textarea；只填必填项保存后 toast「已保存」、回到 `/persons`，库中工号大写、选填为 `null`、状态 `ACTIVE`；全字段（含键盘选「离职」、邮箱大小写与空格）归一化入库；姓名空格 / 超长、工号中文 / 含空格、手机号 10 位、邮箱 `a@b`、部门 / 职位 / 备注超长时字段下方显示对应原因并设置 `aria-invalid` / `aria-describedby`，按钮禁用且不发请求；空表单提交显示「请输入姓名」「请输入工号」且不发请求；已存在 `A001` 时提交 `a001` 在工号字段下显示「工号已存在」、无全局 toast，改工号后错误清除并可保存；提交中按钮禁用并显示「保存中…」，重复点击 / 回车只发 1 次请求；服务端 500 时 toast「保存失败，请稍后再试」、不回显原始信息、按钮恢复；「取消」回列表且不入库；只用键盘完成新增；375px 亮色 / 暗色下带错误提示的 `/persons/new` 无横向滚动，通过（第 1 轮）
   - [ ] 6.3 新建 `apps/web/src/components/person-edit.tsx`：`person.getById`（`retry: false`、`meta.skipGlobalErrorToast`）回填表单，加载中显示骨架屏；`NOT_FOUND` 显示「该人员不存在或已被删除」+「返回列表」；`person.update` 成功后让 `person.list` 和该 `getById` 失效、toast「已保存」、回列表；提交时 `NOT_FOUND` 切换为不存在提示；挂到 `/persons/[id]/edit`
     - 对应验收标准：R04-AC5、R04-AC7、R04-AC8、R04-AC13
   - [ ] 6.4 新建 `apps/web/src/components/person-list.tsx`：带 `<Label>` 的搜索框 +「搜索」按钮（`<form>` 提交，回车可用，搜索后回第 1 页）、状态 `Select`（全部 / 在职 / 离职，切换后回第 1 页）、「新增人员」按钮；`Table` 列为工号、姓名、部门、职位、手机号、状态、更新时间、操作（编辑链接 / 删除按钮），外层 `overflow-x-auto`；空值显示 `-`，更新时间 `YYYY-MM-DD HH:mm`；「上一页」/「下一页」+「第 X / Y 页，共 N 条」，首末页禁用对应按钮；`keepPreviousData`；页码越界自动回退；空状态「暂无人员」+「新增人员」与无结果「没有找到匹配的人员」；加载失败页面内提示
@@ -56,3 +59,4 @@
 - [ ] 9. 自测并对照 requirements.md 逐条验收（含亮色 / 暗色主题手动检查）
   - 对应验收标准：R04-AC1 ~ R04-AC17
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无
+- CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明只读沙箱下 Vitest 未运行，属环境说明而非缺陷，由 W6R 回归测试覆盖）
