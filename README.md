@@ -157,9 +157,13 @@ zyk-dyna-admin/
 - `pnpm run test`: Run unit / integration tests (Vitest)
 - `pnpm run test:e2e`: Run Web end-to-end tests (Playwright)
 
-## Deployment (Cloudflare, work in progress)
+## Deployment (Cloudflare Workers)
 
-`apps/web` includes OpenNext for Cloudflare config (`open-next.config.ts`, `wrangler.jsonc`, with `@opennextjs/cloudflare` and `wrangler` installed). Build output goes to `.open-next/` and `.wrangler/`, both git-ignored. No build / preview / deploy scripts have been added yet.
+GitHub Actions builds and deploys `apps/web` to Cloudflare Workers using OpenNext when Web or shared-package changes are pushed to `main`. Manual deployment is also available from the Actions tab on `main`.
+
+Configure the `CLOUDFLARE_API_TOKEN` repository secret and the `CLOUDFLARE_ACCOUNT_ID` / `NEXT_PUBLIC_SERVER_URL` repository variables first. The workflow generates Prisma Client, checks lint and types, runs Web / API unit tests, builds the Worker, and deploys only if those steps pass. It does not need production database credentials or run database migrations.
+
+See [Cloudflare deployment setup](docs/cloudflare-deployment.md) for token permissions, environment configuration, manual commands, and authentication limitations. Build output goes to `.open-next/` and `.wrangler/`, both git-ignored.
 
 ## Better Auth Schema Generation
 
