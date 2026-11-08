@@ -25,15 +25,16 @@
 zyk-dyna-admin/
 ├── apps/
 │   ├── web/                     # Web 管理端 Next.js，端口 3001
-│   │   ├── src/app/             #   App Router：page.tsx / login/（已登录 redirect 到 /dashboard）/ dashboard/（服务端校验 session，未登录 redirect，含 GitHub 用户查询）
-│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单、user-menu、github-user-search / github-user-card 等
+│   │   ├── src/app/             #   App Router：page.tsx / login/（已登录 redirect 到 /dashboard）/ dashboard/（服务端校验 session，未登录 redirect，含 GitHub 用户查询）/ persons/、persons/new、persons/[id]/edit（人员管理，每个 page 用 getServerSessionUser() 校验登录）
+│   │   ├── src/components/      #   header、providers（Theme + QueryClient + TRPCProvider + Toaster）、登录注册表单、user-menu、github-user-search / github-user-card、person-list / person-form / person-create / person-edit / person-delete-dialog 等
 │   │   ├── src/lib/auth-client.ts   # better-auth/react 客户端（含 usernameClient）
-│   │   ├── src/lib/             #   auth-validation / auth-errors（表单校验、错误码映射）、github-*（用户名校验、资料格式化、错误文案），旁边是 *.test.ts
-│   │   ├── e2e/                 #   Playwright 用例 *.spec.ts；global-setup 迁移并清空测试库，support/ 放公共 helper
+│   │   ├── src/lib/             #   auth-validation / auth-errors（表单校验、错误码映射）、github-*（用户名校验、资料格式化、错误文案）、person-*（人员表单校验、列表格式化、错误文案）、server-session（Server Component 取登录用户）、trpc-errors（取 tRPC 错误码），旁边是 *.test.ts
+│   │   ├── e2e/                 #   Playwright 用例 *.spec.ts；global-setup 迁移并清空测试库，support/ 放公共 helper（page-helpers 键盘 / 窄屏、persons 人员数据准备等）
 │   │   ├── playwright.config.ts #   webServer 启动 server :3000（连测试库）和 web :3001
 │   │   ├── src/utils/trpc.ts    #   tRPC 客户端 + QueryClient（全局错误 toast，credentials: include）
 │   │   ├── src/env.ts           #   Varlock 自动生成，勿手改
 │   │   ├── next.config.ts       #   varlockNextConfigPlugin 包裹
+│   │   ├── open-next.config.ts / wrangler.jsonc  # Cloudflare（OpenNext）部署配置，产物在 .open-next/（已 gitignore）；尚未配置部署脚本
 │   │   └── AGENTS.md            #   Next.js 自动生成的 agent 规则（新版 Next，写代码前查 node_modules/next/dist/docs）
 │   ├── native/                  # 移动端 Expo（scheme: zyk-dyna-admin）
 │   │   ├── app/                 #   Expo Router：_layout.tsx → (drawer)/(tabs)/、modal.tsx、+not-found.tsx
@@ -58,14 +59,15 @@ zyk-dyna-admin/
 │   │       ├── index.ts         #   initTRPC、router、publicProcedure、protectedProcedure（无 session 抛 UNAUTHORIZED）
 │   │       ├── context.ts       #   Context 类型 { session, db, github }
 │   │       ├── lib/github.ts    #   createGithubClient(config) 工厂：调 GitHub REST API，抛带 kind 的 GithubApiError
-│   │       └── routers/         #   index.ts：appRouter（healthCheck、privateData、github），导出 AppRouter 类型；github.ts：github.getUser
+│   │       ├── lib/             #   person-input（人员入参 Zod schema 与归一化）、prisma-errors（P2002 / P2025 识别）、prisma-like（escapeLikePattern）
+│   │       └── routers/         #   index.ts：appRouter（healthCheck、privateData、github、person），导出 AppRouter 类型；github.ts：github.getUser；person.ts：person.list / getById / create / update / delete
 │   ├── auth/                    # @zyk-dyna-admin/auth：createAuth(env, db) 工厂 + Session 类型
 │   ├── db/                      # @zyk-dyna-admin/db：Prisma
-│   │   ├── prisma/schema/       #   多文件 schema：schema.prisma（generator/datasource）、auth.prisma（Better Auth 表）
+│   │   ├── prisma/schema/       #   多文件 schema：schema.prisma（generator/datasource）、auth.prisma（Better Auth 表）、person.prisma（人员表 Person + PersonStatus 枚举）
 │   │   ├── prisma/migrations/
 │   │   ├── prisma/generated/    #   prisma generate 输出（已 gitignore）
 │   │   ├── prisma.config.ts     #   Prisma 7 配置，DATABASE_URL 由 Varlock 加载
-│   │   └── src/index.ts         #   createPrismaClient(env) 工厂 + Database 类型
+│   │   └── src/index.ts         #   createPrismaClient(env) 工厂 + Database 类型，另导出 Person / Prisma 类型、PersonStatus、PrismaClientKnownRequestError
 │   ├── ui/                      # @zyk-dyna-admin/ui：共享 shadcn/ui 组件（仅 Web 使用）
 │   │   └── src/{components,hooks,lib,styles/globals.css}
 │   └── config/                  # @zyk-dyna-admin/config：tsconfig.base.json
