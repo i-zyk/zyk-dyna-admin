@@ -294,3 +294,4 @@ Most formatting and common issues are automatically fixed by Biome. Run `pnpm ex
 - [2026-11-06][R02] E2E 的键盘导航（`tabUntilFocused` / `pressUntilFocused`）、窄屏视口 `NARROW_VIEWPORT`、`getScrollWidth` 已抽到 `apps/web/e2e/support/page-helpers.ts`；新写 E2E 直接复用，不要在 spec 里重复实现
 - [2026-11-07][R03] 访问真实外部服务（如 GitHub API）的冒烟测试命名为 `*.smoke.ts`，用单独的 `vitest.smoke.config.ts` + `test:smoke` 脚本手动执行；默认 `vitest run` 只匹配 `*.test.ts`，不会把它带进 `pnpm run test` / turbo 流水线，避免消耗额度和依赖网络
 - [2026-11-07][R04] Prisma 7（`@prisma/adapter-pg`）的 `contains` / `startsWith` 不会转义 `%`、`_`、`\`，关键词按通配符匹配；模糊搜索前先用 `packages/api/src/lib/prisma-like.ts` 的 `escapeLikePattern()` 转义
+- [2026-11-08][R04] Prisma 把 DateTime 按 UTC 存进不带时区的 `timestamp(3)`，而 `pg` 直接写 `Date` 会按本机时区序列化，导致页面显示时间偏移；E2E 用 `pg` 造数据时把时间转成 ISO 字符串经 `::timestamptz AT TIME ZONE 'UTC'` 写入，读取同样换算回 UTC（见 `apps/web/e2e/support/persons.ts`）

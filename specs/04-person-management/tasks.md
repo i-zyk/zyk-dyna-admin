@@ -40,15 +40,16 @@
   - [✅] 6.5 新建 `apps/web/src/components/person-delete-dialog.tsx`：`AlertDialog` 文案「确定删除人员「姓名（工号）」吗？删除后无法恢复。」，取消 / Esc 不删除；确认按钮在请求中禁用；成功 toast「已删除」，`NOT_FOUND` toast「该人员不存在或已被删除」，两种情况都让 `person.list` 失效（当前页删空由 6.4 的越界回退处理）；在列表每行接入
     - 对应验收标准：R04-AC12、R04-AC13、R04-AC16
     - 测试：`next typegen`、`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（132 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（9 个，跑完已删除）校验「删除」按钮可访问名称为「删除 姓名（工号）」，对话框文案「确定删除人员「张三（A001）」吗？删除后无法恢复。」；「取消」和 Esc 关闭对话框且不删除；确认后 toast「已删除」、对话框关闭、该行从列表消失且计数更新，刷新后仍不存在、库中已删除；请求进行中确认按钮显示「删除中…」并 `aria-disabled`、「取消」禁用、Esc 不关闭，重复点击 / 回车只发 1 次 `person.delete`，删光后显示「暂无人员」；列表打开后在库中删除再确认，toast「该人员不存在或已被删除」、对话框关闭、列表刷新且无「已删除」；`person.delete` 500 时 toast「删除失败，请稍后再试」、不回显原始信息、对话框保留且确认按钮恢复、可取消；第 2 页只有 1 条时删除后回到「第 1 / 1 页，共 20 条」；只用键盘（Tab / Enter）打开对话框并确认删除；375px 亮色 / 暗色下打开长姓名 / 长工号的删除对话框，对话框不超出视口且页面无横向滚动，通过（第 1 轮）
-- [ ] 7. 编写测试
+- [✅] 7. 编写测试
   - [✅] 7.1 `packages/api` 单元测试 `lib/person-input.test.ts`：姓名空串 / 只有空格 / 51 个字符被拒，50 个字符通过且首尾空格被去掉；工号 `a`、33 位、`A 001`、`工号1`、`A_001` 被拒，` a-001 ` 归一化为 `A-001`；手机号 `1381234567`（10 位）、`12812345678`、`23812345678`、`138123456789` 被拒，`13812345678` 通过；邮箱 `abc`、`a@b` 被拒，` Tom@Example.COM ` 归一化为 `tom@example.com`；部门 / 职位 51 个字符、备注 501 个字符被拒；选填字段 `""`、`"  "`、`null`、`undefined` 都归一化为 `null`；状态缺省或不是 `ACTIVE` / `INACTIVE` 时被拒；`personListInputSchema` 的 `page` < 1、`pageSize` > 100 被拒，默认值为 1 / 20，`keyword` 只有空格视为无条件
     - 测试：`pnpm --dir packages/api run test`（4 个文件 96 个用例，含新增 `lib/person-input.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`、`pnpm run test`（api 96 个、web 132 个用例），通过（第 1 轮）
   - [✅] 7.2 `packages/api` 路由测试 `routers/person.test.ts`（`appRouter.createCaller` + 注入假 `db.person`，抛 `@zyk-dyna-admin/db` 导出的 `PrismaClientKnownRequestError`）：`session: null` 时 5 个过程都抛 `UNAUTHORIZED` 且不访问数据库；`create` / `update` 传给 Prisma 的数据已归一化（工号大写、邮箱小写、空串转 `null`）；`P2002` → `CONFLICT`；`getById` 查不到、`update` / `delete` 抛 `P2025` → `NOT_FOUND`；其他错误 → `INTERNAL_SERVER_ERROR` 且不回显原始信息；`list` 的 `where`（姓名或工号 `insensitive`、状态）、`orderBy`、`skip` / `take` 与返回结构 `{ items, total, page, pageSize }` 正确；非法入参 `BAD_REQUEST` 且不访问数据库
     - 测试：`pnpm --dir packages/api run test`（5 个文件 130 个用例，含新增 `routers/person.test.ts`）、`pnpm --dir packages/api run check-types`、`biome check packages/api`，通过（第 1 轮）
   - [✅] 7.3 `apps/web` 单元测试：`person-validation.test.ts`（与 7.1 同一组用例的前端结果，并断言前后端正则 `source` 一致、对同组用例结果一致；中文错误文案）；`person-format.test.ts`（`formatPersonDateTime` 输出 `YYYY-MM-DD HH:mm`、非法值返回 `-`；`displayPersonValue` 对 `null` / `undefined` / `""` 返回 `-`；`getTotalPages(0, 20) = 1`、`(20, 20) = 1`、`(21, 20) = 2`）；`person-errors.test.ts`（`CONFLICT`、`NOT_FOUND`、`INTERNAL_SERVER_ERROR`、无错误码时的文案）
     - 测试：`pnpm --dir apps/web run test`（8 个文件 276 个用例，含新增 `person-validation.test.ts` / `person-format.test.ts` / `person-errors.test.ts` 共 144 个用例）、`pnpm --dir apps/web run check-types`、`biome check apps/web`，通过（第 1 轮）
-  - [ ] 7.4 E2E 数据准备 `apps/web/e2e/support/persons.ts`：`resetPersons()`（只清空 `person` 表）、`seedPersons(rows)`（用 `pg` 插入，自带 `id`、`updatedAt`，可批量造数据、指定较早的更新时间）
-  - [ ] 7.5 E2E `apps/web/e2e/persons.spec.ts`（每个用例前 `resetPersons()`，先通过注册接口准备并登录用户）：
+  - [✅] 7.4 E2E 数据准备 `apps/web/e2e/support/persons.ts`：`resetPersons()`（只清空 `person` 表）、`seedPersons(rows)`（用 `pg` 插入，自带 `id`、`updatedAt`，可批量造数据、指定较早的更新时间）
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（现有 45 个用例全部通过）+ 临时 Playwright 用例（3 个，跑完已删除）校验 `seedPersons` 缺省 `id` 为 `e2e-` 前缀、`status` 为 `ACTIVE`、选填为 `null`、`createdAt` 等于 `updatedAt`，自定义字段原样入库且返回值与 `findPersonByEmployeeNo()` 读回一致，指定的 `updatedAt` 在库中按 UTC 存储（与 Prisma 一致）；空数组不写库；`buildPersonSeeds(23)` 姓名 / 工号补零、`overrides` 生效；`countPersons()` / `deletePersonById()` 正确；`resetPersons()` 只清空 `person` 表、不影响 `user` 表；登录后 `/persons` 按入参顺序显示预置数据，「第 1 / 2 页，共 22 条」，缺省与指定较早的更新时间都按本地时区显示、无偏移，通过（第 1 轮）
+  - [✅] 7.5 E2E `apps/web/e2e/persons.spec.ts`（每个用例前 `resetPersons()`，先通过注册接口准备并登录用户）：
     - 访问控制：未登录访问 `/persons`、`/persons/new`、`/persons/xxx/edit` 都被重定向到 `/login`；未登录直接请求 `/trpc/person.list` 返回 401
     - 导航与空状态：顶部导航「人员管理」进入 `/persons`；空库显示「暂无人员」和「新增人员」
     - 新增：只填姓名、工号保存成功，toast「已保存」，回到列表且新人员在第一行，工号显示为大写，选填列显示 `-`，页面不含 `null` / `undefined`
@@ -59,6 +60,7 @@
     - 搜索 / 筛选 / 翻页：预置 21+ 条，按姓名片段、工号小写片段搜到目标；状态筛选「离职」只显示离职人员；搜索后回到第 1 页；显示「第 1 / 2 页，共 N 条」，下一页 / 上一页可用；无结果显示「没有找到匹配的人员」
     - 已删除的人员：打开已删除人员的编辑页、编辑页打开后被删除再提交、列表打开后被删除再确认删除，都显示「该人员不存在或已被删除」，编辑页有「返回列表」，页面不崩溃
     - 可访问性与布局：只用键盘（复用 `tabUntilFocused` / `pressUntilFocused`）完成新增、搜索、翻页、筛选、编辑和删除确认；亮色 / 暗色主题下 `/persons`、`/persons/new` 在 `NARROW_VIEWPORT` 下 `getScrollWidth(page) <= 375`，表格容器自身可横向滚动
+    - 测试：`pnpm --dir apps/web run check-types`、`biome check apps/web`、`pnpm --dir apps/web run test`（8 个文件 276 个用例）、`pnpm run test:e2e`（66 个用例全部通过，含新增 `persons.spec.ts` 21 个用例），通过（第 1 轮）
   - 对应验收标准：R04-AC1 ~ R04-AC16
 - [ ] 8. 运行 `pnpm run check` 与 `pnpm run check-types`，修复所有问题
   - 对应验收标准：R04-AC17
@@ -68,3 +70,4 @@
 - CR（2026-11-07）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明只读沙箱下 Vitest 未运行，属环境说明而非缺陷，由 W6R 回归测试覆盖）
 - CR（2026-11-08）：Codex 提出 2 条，采纳 2 条；不采纳：无
 - CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无
+- CR（2026-11-08）：Codex 提出 0 条，采纳 0 条；不采纳：无（Codex 注明受只读环境限制未重跑 E2E，属环境说明而非缺陷，由 W6R 回归测试覆盖）
