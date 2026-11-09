@@ -173,7 +173,7 @@ Run `pnpm run build:lambda` to create `apps/server/dist/server-lambda.zip`, then
 
 The package includes the server's `.env.schema` and Varlock runtime, but no local `.env` files or resolved secrets. Configure production values in Lambda. Local Node development and builds continue to use `apps/server/src/index.ts`.
 
-See [the complete production deployment process](docs/production-deployment.md) for VPC / Aurora / NAT / SSM bastion infrastructure, private migrations, GitHub OIDC deployment, same-origin login cookies, Android APK builds, and cost controls. The template requires an AWS plan that permits VPC Aurora; free-plan credits alone do not remove that restriction.
+See [the current free-plan deployment process](docs/production-deployment.md) for Aurora Express with IAM authentication, Lambda outside a VPC, same-origin login cookies, CI artifacts, Web releases, and Android APK builds. The original [VPC deployment](docs/vpc-deployment.md) is retained as an optional architecture and is not used by the current FREE account. AWS automatic deployment remains disabled until the account permits GitHub OIDC; local AWS CLI deployment is available.
 
 ## Better Auth Schema Generation
 

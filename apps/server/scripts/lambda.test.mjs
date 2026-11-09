@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
@@ -24,6 +24,7 @@ function runArchive(source, env = runtimeEnv) {
 	const directory = mkdtempSync(join(tmpdir(), "server-lambda-test-"));
 	try {
 		execFileSync("unzip", ["-q", archivePath, "-d", directory]);
+		chmodSync(directory, 0o555);
 		return spawnSync(
 			process.execPath,
 			["--input-type=module", "--eval", source],
@@ -35,6 +36,7 @@ function runArchive(source, env = runtimeEnv) {
 			}
 		);
 	} finally {
+		chmodSync(directory, 0o700);
 		rmSync(directory, { force: true, recursive: true });
 	}
 }
@@ -42,7 +44,7 @@ function runArchive(source, env = runtimeEnv) {
 test("ZIP runs outside the workspace using only deployment environment variables", () => {
 	const result = runArchive(`
 		import assert from "node:assert/strict";
-		import { readdirSync } from "node:fs";
+		import { existsSync, readdirSync } from "node:fs";
 		import { handler } from "./index.mjs";
 
 		const wasmFile = readdirSync(".").find((name) => name.startsWith("query_compiler_fast_bg.postgresql.wasm-base64-"));
@@ -71,6 +73,7 @@ test("ZIP runs outside the workspace using only deployment environment variables
 		assert.equal(context.callbackWaitsForEmptyEventLoop, false);
 		assert.equal(root.statusCode, 200);
 		assert.equal(root.body, "OK");
+		assert.equal(existsSync("src"), false, "Lambda must not generate source files at startup");
 
 		const health = await handler(event("/trpc/healthCheck"));
 		assert.equal(health.statusCode, 200);
@@ -91,6 +94,29 @@ test("ZIP runs outside the workspace using only deployment environment variables
 		assert.equal(preflight.headers["access-control-allow-origin"], "https://app.example.com");
 		assert.equal(preflight.headers["access-control-allow-credentials"], "true");
 	`);
+	assert.equal(result.error, undefined);
+	assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test("IAM mode initializes without a static database password", () => {
+	const result = runArchive(
+		`
+		import assert from "node:assert/strict";
+		import { handler } from "./index.mjs";
+		const response = await handler({
+			version: "2.0", routeKey: "$default", rawPath: "/", rawQueryString: "",
+			headers: { host: "api.example.com" }, isBase64Encoded: false,
+			requestContext: { domainName: "api.example.com", stage: "$default", http: { method: "GET", path: "/", sourceIp: "127.0.0.1", protocol: "HTTP/1.1" } }
+		});
+		assert.equal(response.statusCode, 200);
+		assert.equal(response.body, "OK");
+	`,
+		{
+			...runtimeEnv,
+			DATABASE_AUTH_MODE: "iam",
+			DATABASE_URL: "postgresql://app_user@db.example:5432/app",
+		}
+	);
 	assert.equal(result.error, undefined);
 	assert.equal(result.status, 0, result.stderr || result.stdout);
 });

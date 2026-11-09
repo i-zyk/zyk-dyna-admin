@@ -1,128 +1,123 @@
-# Cloudflare、AWS 与 Android 部署流程
+# 当前免费计划部署流程
 
-## 架构和费用边界
+本项目保留 AWS FREE 计划，使用已有的 200 美元额度；资源使用仍扣除额度，需在 Billing 查看余额和到期日，并非永久免费。
 
 ```mermaid
 flowchart LR
-  Web[Next.js / Cloudflare Worker] --> Gateway[API Gateway HTTP API]
-  Android[Android / Expo] --> Web
-  Gateway --> Lambda[Lambda / 私有应用子网]
-  Lambda --> Aurora[Aurora PostgreSQL Serverless v2 / 隔离子网]
-  Lambda --> NAT[NAT Gateway / 公有子网]
-  NAT --> IGW[Internet Gateway]
-  IGW --> GitHub[GitHub API]
-  Admin[管理员 / SSM 隧道] --> Bastion[无公网 IP 的跳板机]
-  Bastion --> Aurora
-  Actions[GitHub Actions / OIDC] --> Migration[CodeBuild / 私有子网迁移]
-  Migration --> Aurora
+  Web[Next.js 管理端] --> CF[Cloudflare Worker / 同源代理]
+  Android[Android / Expo] --> CF
+  CF --> API[API Gateway HTTP API]
+  API --> Lambda[Lambda / VPC 外]
+  Lambda -->|TLS + IAM 短期令牌| DB[Aurora Express PostgreSQL]
+  Lambda --> GitHub[GitHub REST API]
+  Admin[管理员 / AWS CLI + psql] -->|TLS + IAM| DB
 ```
 
-Lambda 与 Aurora 同一个 VPC，分别放在应用子网和数据库子网。私有 Lambda 不能直接通过 IGW 出网，必须经过公有子网的 NAT Gateway。API Gateway 提供入站 HTTPS 地址，与出站 NAT/IGW 分开。
+| 原要求 | 免费计划实际方案 |
+| --- | --- |
+| Next.js 管理 GitHub 人员 | 查询、入库、编辑展示名称/备注、确认删除 |
+| Lambda 接口 | Node.js 24 + Hono + API Gateway |
+| 私有 Lambda 经 NAT/IGW 出网 | Lambda 在 VPC 外，不创建 NAT |
+| Lambda 与 Aurora 同 VPC | Express 无法加入 VPC，此要求已调整 |
+| 跳板机管理数据库 | IAM + TLS 的 psql/pgAdmin/CloudShell，不创建 EC2 |
+| GitHub Actions | Web 自动发布、Server 测试和 ZIP 制品、Android APK 构建；AWS 自动发布受 OIDC 策略限制 |
+| Android 展示 | 登录、搜索、分页、下拉刷新、详情和 GitHub 链接 |
 
-当前模板使用两个可用区、一个 NAT、一个 Aurora writer，属于控制成本的基础部署。Aurora 最小 0、最大 2 ACU，空闲 300 秒后暂停；唤醒会增加首次请求等待。NAT、EBS、Aurora 存储、Secrets Manager 等仍计费，200 美元额度不是永久免费或费用上限。
+原 VPC 架构保留在 [vpc-deployment.md](vpc-deployment.md) 和 `infra/production.yaml`，不属于当前免费部署，不要在本账号执行它。
 
-免费计划账号创建普通 VPC Aurora 会被 AWS 拒绝，只有 Express 模式可用，而 Express 不符合本项目同 VPC 的要求。必须由账号持有人自行升级计划后才能执行这里的云资源创建。正常升级保留剩余额度；超出额度或额度不适用的用量可能向支付方式收费。不要通过加入 Organizations 的方式升级，因为这会影响免费额度资格。
+## 地址与配置
 
-## 1. 准备访问权限
+- Web：`https://zyk-dyna-admin.izyk-me.workers.dev`
+- API：`https://jjdpgobje6.execute-api.us-east-2.amazonaws.com`
+- Lambda：`zyk-dyna-admin`，区域 `us-east-2`
+- Aurora：`zyk-dyna-admin-free`，PostgreSQL Express
+- 数据库：`zyk_dyna_admin`；应用角色：`zyk_app`
+- Lambda IAM 角色：`zyk-dyna-admin-free-lambda`，日志权限和指定数据库用户的连接权限
+- Expo 项目：<https://expo.dev/accounts/izyk/projects/zyk-dyna-admin>
 
-本地使用 AWS CLI 浏览器登录，不需要在代码中存放访问密钥：
+Lambda 设置 `DATABASE_AUTH_MODE=iam`、`DATABASE_AWS_REGION=us-east-2`。`DATABASE_URL` 只含用户名、endpoint 和数据库名，不含密码。SDK 通过 Lambda 执行角色为每个新连接生成短期令牌，不能把令牌固定存进环境变量。
+
+本地继续使用默认的 `DATABASE_AUTH_MODE=password` 和原连接串。共享数据库包通过配置接收密码回调，不自行读取环境变量或 AWS 凭证。
+
+Aurora 容量为 0–1 ACU，闲置 300 秒后暂停。IAM 模式的 Lambda 在请求结束时关闭数据库连接，避免冻结的运行环境保留连接而阻止暂停。首次恢复访问会有唤醒延迟。
+
+## 发布后端
+
+安装 Node.js 24 和根 `packageManager` 指定的 pnpm，从仓库根目录运行：
 
 ```bash
 aws login --profile zyk-dyna-admin --region us-east-2
-aws freetier get-account-plan-state --profile zyk-dyna-admin --region us-east-1
-```
-
-核对账号为 `181027096321`、区域 `us-east-2`、计划允许创建 VPC Aurora。GitHub CI 使用 `token.actions.githubusercontent.com` OIDC 提供商。如果 AWS 策略拒绝 IAM OIDC 操作，必须先解决账号权限限制；本地浏览器登录不能替代 GitHub CI 的身份配置。
-
-## 2. 创建基础设施
-
-模板在 `infra/production.yaml`。如果同名堆栈是此前失败后留下的 `ROLLBACK_COMPLETE`，先核对资源清单；只删除该失败堆栈，再重新创建。不要删除已有业务资源。
-
-```bash
-aws cloudformation deploy \
-  --template-file infra/production.yaml \
-  --stack-name zyk-dyna-admin-production \
-  --capabilities CAPABILITY_IAM \
-  --profile zyk-dyna-admin --region us-east-2
-```
-
-已有 GitHub OIDC 提供商时，添加参数 `--parameter-overrides GithubOidcProviderArn=实际提供商ARN`。模板把 GitHub 部署角色限定到 `i-zyk/zyk-dyna-admin` 的 `main` 分支，不给工作流创建基础设施的权限。
-
-完成后在 CloudFormation 的 Outputs 中可查到 VPC、应用子网、数据库 endpoint、跳板机 ID、Secrets Manager ARN、迁移项目、制品桶和可选的 GitHub 角色 ARN。数据库密码和认证密钥自动生成，不写入仓库。
-
-## 3. 部署 Lambda 和迁移数据库
-
-先保证现有 HTTP API `jjdpgobje6` 的 `ANY /`、`ANY /{proxy+}` 都集成到函数 `zyk-dyna-admin`，使用 payload v2 和 `$default` 自动部署 stage，并具备调用 Lambda 的权限。
-
-```bash
 pnpm install --frozen-lockfile
 pnpm run build:lambda
 pnpm --dir apps/server run test:lambda
+node --test scripts/aws/*.test.mjs
+
 AWS_PROFILE=zyk-dyna-admin AWS_REGION=us-east-2 \
 NEXT_PUBLIC_SERVER_URL=https://zyk-dyna-admin.izyk-me.workers.dev \
 API_UPSTREAM_URL=https://jjdpgobje6.execute-api.us-east-2.amazonaws.com \
-node scripts/aws/deploy.mjs
+node scripts/aws/deploy-free.mjs --bootstrap
 ```
 
-脚本上传不含本地 `.env` 和密钥文件的源代码包，通过 VPC 内的 CodeBuild 执行 `prisma migrate deploy`，再授予 `zyk_app` 业务表读写权限。应用不使用数据库管理员账号。迁移失败时停止部署，不更新 Lambda。
+首次使用 `--bootstrap` 创建 Express 和应用 Lambda 角色；后续更新省略该参数。脚本要求账户仍为 FREE，不升级计费计划，也不重建已有数据库。
 
-迁移通过后更新现有函数：Node.js 24、`index.handler`、512 MB、30 秒、应用子网和安全组，随后上传 ZIP 并检查 API 根路径返回 `OK`。数据库使用 TLS 验证 RDS 证书，连接池每个运行实例最多 3 个连接；预留并发为 5。
+脚本先通过管理员 IAM 身份创建/确认数据库，执行现有 Prisma migrations，授予 `zyk_app` 业务表读写权限；迁移成功后更新 Lambda 配置与 ZIP，再检查 API 根路径。迁移失败就停止发布。应用不使用数据库管理员身份。
 
-## 4. 配置 GitHub Actions
+Prisma Migrate 使用 `sslmode=require&sslaccept=strict`，IAM 令牌经 URL 编码以保留其已有百分号转义。运行时 pg 直接使用密码回调和严格 TLS。ZIP 打包移除类型代码生成指令，兼容 Lambda 只读部署目录。
+
+## GitHub Actions
 
 仓库 Settings → Secrets and variables → Actions：
 
 | 类型 | 名称 | 值 |
 | --- | --- | --- |
-| Variable | `CLOUDFLARE_ACCOUNT_ID` | 现有 Cloudflare 账户 ID |
-| Variable | `NEXT_PUBLIC_SERVER_URL` | `https://zyk-dyna-admin.izyk-me.workers.dev` |
-| Variable | `API_UPSTREAM_URL` | `https://jjdpgobje6.execute-api.us-east-2.amazonaws.com` |
-| Variable | `AWS_DEPLOY_ROLE_ARN` | 堆栈输出 `GithubRoleArn` |
-| Secret | `CLOUDFLARE_API_TOKEN` | 现有 Workers 发布 Token |
-| Secret | `EXPO_TOKEN` | 在 Expo 账号中创建的 CI access token |
+| Variable | `CLOUDFLARE_ACCOUNT_ID` | 当前 Cloudflare 账户 ID |
+| Variable | `NEXT_PUBLIC_SERVER_URL` | 上述 Web 地址 |
+| Variable | `API_UPSTREAM_URL` | 上述 API 地址 |
+| Secret | `CLOUDFLARE_API_TOKEN` | Workers 发布令牌 |
+| Secret | `EXPO_TOKEN` | Expo CI access token |
 
-- `Deploy Server to AWS`：main 上后端相关变更触发；测试、打包、OIDC 登录、迁移、部署和健康检查。
-- `Deploy Web to Cloudflare`：main 上 Web/共享包相关变更触发；测试、OpenNext 构建、发布 Worker。
-- `Build Android APK`：在 Actions 手动触发；类型检查后调用 EAS 构建可安装 APK。首次 Android 签名凭据须已在 EAS 项目中配置。
+Expo 令牌在 [Expo Access tokens](https://expo.dev/accounts/izyk/settings/access-tokens) 创建，只保存到 GitHub Secret，不发到聊天、不提交代码。
 
-首次发布先完成后端，再发布 Web。后续涉及新增 API 或数据库字段时也遵循这个顺序；三个工作流分别运行，不应假设它们之间已经建立发布依赖。
+- **Deploy Web to Cloudflare**：main 相关变更触发测试、OpenNext 构建、发布；也可手动执行。
+- **Build and deploy Server**：PR/main 后端变更触发测试、构建 ZIP，上传 `server-lambda` 制品并保留 7 天。账号此前拒绝 GitHub OIDC 提供商创建，因此未配置 `AWS_DEPLOY_ROLE_ARN`，工作流会明确记录 AWS 发布跳过。实际 AWS 发布使用本地 CLI。
+- **Build Android APK**：Actions → Run workflow，选择 main；通过 EXPO_TOKEN 调用 EAS 构建 APK，完成后从日志中的 Expo 链接下载。
 
-浏览器访问 Web 的 `/api/auth/*` 和 `/trpc/*` 同源代理。`BETTER_AUTH_URL` 与 `CORS_ORIGIN` 都是 Web origin；Cookie 由浏览器自动管理，无需手填。环境变量变更后重新构建 Web。
+不要把 Server CI 成功理解为 AWS 自动发布已完成。未来策略允许 OIDC 后，需配置有迁移和应用发布权限的角色，填写 `AWS_DEPLOY_ROLE_ARN`，使用 `AWS_DEPLOYMENT_MODE=free`。不使用长期 AWS 密钥绕过当前策略。
 
-## 5. 通过跳板机管理数据库
+## Web、Cookie 与 Android
 
-跳板机没有公网 IP，也不开放 SSH。使用 AWS Systems Manager Session Manager，电脑需要安装 AWS CLI、Session Manager plugin 和 PostgreSQL 客户端。
+`NEXT_PUBLIC_SERVER_URL` 是 Web 同源地址，`API_UPSTREAM_URL` 是实际 API 地址。浏览器请求 `/api/auth/*`、`/trpc/*`，由 Worker 转发并保留 Cookie 和多个 Set-Cookie，用户响应禁止缓存。
 
-用堆栈输出的实例 ID 和数据库 host 替换下面占位值：
+Lambda 的 `BETTER_AUTH_URL`、`CORS_ORIGIN` 都是 Web origin。浏览器自动保存 Cookie，无需手填；Server Component 转发 Cookie 校验 session。修改部署变量后重新构建 Web。
 
-```bash
-aws ssm start-session \
-  --target 实际跳板机实例ID \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["实际数据库host"],"portNumber":["5432"],"localPortNumber":["15432"]}' \
-  --profile zyk-dyna-admin --region us-east-2
-```
+首次使用时在 Web 注册自己的账号。当前沿用原型已有权限模型：所有登录用户可以管理共享人员库。
 
-隧道保持运行，在另一个终端连接。下载官方 RDS CA 后使用 `sslmode=verify-full`；libpq 的 `host` 填实际数据库域名、`hostaddr` 填 `127.0.0.1`、`port` 填 `15432`，从而兼顾本地隧道和证书域名校验。密码从 Secrets Manager 管理员 secret 获取，使用交互式输入，不放进命令历史。
+`apps/native/eas.json` 的 preview 输出可安装 APK，production 输出 Play Store 使用的 AAB。本次为 APK 内部分发，未上架 Google Play。Android 使用相同账号登录，展示同一份数据库资料。
 
-## 6. Android 安装与验收
+验收：注册/登录 → 搜索并加入 GitHub 用户 → 修改名称/备注 → 刷新仍登录 → Android 下拉刷新显示 → Web 删除 → Android 刷新后消失 → 退出后保护接口拒绝访问。
 
-Expo 项目：<https://expo.dev/accounts/izyk/projects/zyk-dyna-admin>。`apps/native/eas.json` 的 preview 生成 APK，production 生成 Google Play 使用的 AAB；本次目标是 APK 内部分发，尚未发布到应用商店。
+## 数据库管理
+
+不使用静态数据库密码或跳板机。安装 AWS CLI 和 PostgreSQL 客户端后，可使用 IAM 登录；令牌有效 15 分钟，重连时重新生成。
 
 ```bash
-cd apps/native
-npx eas-cli@27.5.0 login
-npx eas-cli@27.5.0 build --platform android --profile preview
+export PGHOST=zyk-dyna-admin-free.cluster-c1wkai4g2ni4.us-east-2.rds.amazonaws.com
+export PGPORT=5432
+export PGDATABASE=zyk_dyna_admin
+export PGUSER=zyk_admin
+export PGSSLMODE=verify-full
+export PGSSLROOTCERT=system
+PGPASSWORD="$(aws rds generate-db-auth-token \
+  --hostname "$PGHOST" --port "$PGPORT" --username "$PGUSER" \
+  --profile zyk-dyna-admin --region us-east-2)" psql
 ```
 
-下载构建完成后的 APK，在 Android 手机上安装。登录与 Web 相同的账号，确认能浏览、搜索、下拉刷新人员库，进入详情并打开 GitHub 页面。
+本机客户端需支持系统 CA 信任库。也可从 RDS → Connectivity & security → CloudShell 连接。不要关闭证书验证，不要用生产数据库执行会清表的 E2E。
 
-上线验收：Web 注册/登录 → 搜索 GitHub 用户 → 加入人员库 → 修改名称和备注 → 刷新仍登录 → Android 显示同一人员 → Web 删除后 Android 刷新消失 → 退出后受保护接口返回未授权。
+## 额度与停用
 
-## 7. 费用和停用
+定期查看 Billing 中的余额和期限。自动暂停不等于存储免费；当前没有 NAT 或 EC2 持续运行费用。不要为延长部署自动升级计划。
 
-在 Billing 中查看 Credits 的真实余额与到期日，并配置预算提醒。预算提醒不会自动停止 NAT、数据库或其他资源。闲置时可停止跳板机以减少实例计算用量，EBS 仍计费；Aurora 自动暂停也不会停止存储收费。
+数据库启用删除保护。停用时先备份数据，再由账号持有人决定是否解除删除保护、删除数据库、Lambda/API 和保留的快照。
 
-彻底停用需要逐项核对并删除资源。数据库启用删除保护且堆栈删除策略保留快照，制品桶保留，快照、S3 和其他残留资源可能继续计费。删除数据库或快照前先导出需要的数据。
-
-参考：[AWS 计划与额度](https://aws.amazon.com/free/free-tier-faqs/)、[Aurora 自动暂停](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2-auto-pause.html)、[Session Manager 数据库隧道](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html)。
+参考：[Aurora Express 的限制和 IAM 连接](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_GettingStartedAurora.AuroraPostgreSQL.ExpressConfig.html)、[AWS 免费计划](https://aws.amazon.com/free/free-tier-faqs/)。
