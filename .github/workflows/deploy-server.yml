@@ -1,6 +1,8 @@
-name: Deploy Server to AWS
+name: Build and deploy Server
 on:
   workflow_dispatch:
+  pull_request:
+    paths: ["apps/server/**", "packages/api/**", "packages/auth/**", "packages/db/**", "scripts/aws/**", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/deploy-server.yml"]
   push:
     branches: [main]
     paths: ["apps/server/**", "packages/api/**", "packages/auth/**", "packages/db/**", "scripts/aws/**", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/deploy-server.yml"]
@@ -8,11 +10,10 @@ permissions:
   contents: read
   id-token: write
 concurrency:
-  group: aws-server-production
+  group: aws-server-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  deploy:
-    if: github.ref == 'refs/heads/main'
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -22,14 +23,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: {persist-credentials: false}
-      - name: Require AWS OIDC configuration
-        env:
-          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-        run: |
-          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
-            echo '::error::Configure AWS_DEPLOY_ROLE_ARN after the AWS organization allows GitHub OIDC.'
-            exit 1
-          fi
       - uses: actions/setup-node@v7
         with: {node-version: "24", package-manager-cache: false}
       - uses: pnpm/action-setup@v6
@@ -41,11 +34,30 @@ jobs:
         run: |
           pnpm run build:lambda
           pnpm --dir apps/server run test:lambda
+          node --test scripts/aws/*.test.mjs
           pnpm exec turbo run check-types --filter=server
-          pnpm --dir packages/api run test
+          pnpm exec turbo run test --filter=@zyk-dyna-admin/api --filter=@zyk-dyna-admin/db
+      - uses: actions/upload-artifact@v7
+        with:
+          name: server-lambda
+          path: apps/server/dist/server-lambda.zip
+          if-no-files-found: error
+          retention-days: 7
+      - name: Explain pending AWS identity configuration
+        if: vars.AWS_DEPLOY_ROLE_ARN == ''
+        run: echo 'AWS deployment is skipped because AWS_DEPLOY_ROLE_ARN is not configured. This account previously denied GitHub OIDC creation. The verified Lambda ZIP is available in artifacts.' >> "$GITHUB_STEP_SUMMARY"
       - uses: aws-actions/configure-aws-credentials@v6
+        if: github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-2
-      - name: Migrate private database and deploy Lambda
-        run: node scripts/aws/deploy.mjs
+      - name: Migrate and deploy AWS application
+        if: github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+        env:
+          AWS_DEPLOYMENT_MODE: ${{ vars.AWS_DEPLOYMENT_MODE || 'free' }}
+        run: |
+          if [ "$AWS_DEPLOYMENT_MODE" = "vpc" ]; then
+            node scripts/aws/deploy.mjs
+          else
+            node scripts/aws/deploy-free.mjs
+          fi

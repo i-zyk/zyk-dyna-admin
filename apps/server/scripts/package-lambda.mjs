@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, copyFile, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,9 +9,15 @@ const serverDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const bundleDir = join(serverDir, "dist/lambda");
 const archivePath = join(serverDir, "dist/server-lambda.zip");
 const varlockDir = resolve(dirname(require.resolve("varlock/auto-load")), "..");
+const CODEGEN_DIRECTIVE = /^#\s*@generateTsTypes\(.*\)\r?\n/gm;
 
 await access(join(bundleDir, "index.mjs"));
-await copyFile(join(serverDir, ".env.schema"), join(bundleDir, ".env.schema"));
+const schema = await readFile(join(serverDir, ".env.schema"), "utf8");
+// Lambda's /var/task is read-only. Runtime validation must not generate TypeScript.
+await writeFile(
+	join(bundleDir, ".env.schema"),
+	schema.replace(CODEGEN_DIRECTIVE, "")
+);
 await writeFile(
 	join(bundleDir, "package.json"),
 	`${JSON.stringify({ private: true, type: "module" }, null, 2)}\n`

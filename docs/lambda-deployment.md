@@ -2,6 +2,8 @@
 
 以下步骤针对现有函数 `zyk-dyna-admin`、区域 `us-east-2`（美国俄亥俄），使用 Node.js 24 和 ZIP 部署。
 
+**当前实际部署采用免费计划的 Aurora Express + IAM，Lambda 不连接 VPC。完整命令和配置以 [production-deployment.md](production-deployment.md) 为准。下面的密码数据库/VPC 说明仅用于未来可选架构。**
+
 ## 1. 生成部署包
 
 在仓库根目录执行：
@@ -125,7 +127,7 @@ aws lambda update-function-code \
   --zip-file fileb://apps/server/dist/server-lambda.zip
 ```
 
-这条命令会更新真实 AWS 函数；本次仓库实现和本地验证不会自动执行它。后续可单独配置 GitHub Actions 的 AWS OIDC 部署工作流。
+这条命令会更新真实 AWS 函数。免费方案使用 `scripts/aws/deploy-free.mjs` 在迁移通过后发布；GitHub OIDC 仍受账号策略限制，Server CI 会打包而跳过未配置的 AWS 自动发布步骤。
 
 ## 参考
 

@@ -11,6 +11,7 @@ allowBuilds:
 overrides:
   "@next/env": npm:@varlock/nextjs-integration@1.2.2
 catalog:
+  "@aws-sdk/rds-signer": 3.1164.0
   zod: ^4.5.4
   "@types/node": ^26.4.1
   varlock: 1.23.0

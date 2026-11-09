@@ -31,7 +31,9 @@ if (
 const url = new URL(`postgresql://${process.env.DB_HOST}:5432/${database}`);
 url.username = admin.username;
 url.password = admin.password;
-url.searchParams.set("sslmode", "verify-full");
+url.searchParams.set("sslmode", "require");
+url.searchParams.set("sslaccept", "strict");
+url.searchParams.set("sslcert", "/tmp/rds-ca.pem");
 const env = {
 	...process.env,
 	DATABASE_URL: url.toString(),
