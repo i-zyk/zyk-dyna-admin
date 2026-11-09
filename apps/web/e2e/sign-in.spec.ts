@@ -203,7 +203,7 @@ test("登录请求进行中时按钮显示加载并禁用，不能重复提交",
 	const signInReleased = new Promise<void>((resolve) => {
 		releaseSignIn = resolve;
 	});
-	await page.route(`${SERVER_URL}${SIGN_IN_USERNAME_PATH}`, async (route) => {
+	await page.route(`${WEB_URL}${SIGN_IN_USERNAME_PATH}`, async (route) => {
 		await signInReleased;
 		await route.continue();
 	});

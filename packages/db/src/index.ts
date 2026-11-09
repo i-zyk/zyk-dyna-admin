@@ -7,9 +7,15 @@ import {
 } from "../prisma/generated/client";
 import type { DatabaseConfig } from "./config";
 
+const DATABASE_POOL_SIZE = 3;
+// Aurora can take several seconds to resume after an idle auto-pause.
+const DATABASE_CONNECT_TIMEOUT_MS = 20_000;
+
 export function createPrismaClient(env: DatabaseConfig) {
 	const adapter = new PrismaPg({
 		connectionString: env.DATABASE_URL,
+		connectionTimeoutMillis: DATABASE_CONNECT_TIMEOUT_MS,
+		max: DATABASE_POOL_SIZE,
 	});
 	return new PrismaClient({ adapter });
 }

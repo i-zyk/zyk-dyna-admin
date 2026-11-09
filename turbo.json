@@ -48,6 +48,7 @@
     }
   },
   "globalEnv": [
+    "API_UPSTREAM_URL",
     "BETTER_AUTH_SECRET",
     "BETTER_AUTH_URL",
     "CI",

@@ -1,0 +1,273 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private Aurora, Lambda networking, SSM bastion, and migration runner for zyk-dyna-admin.
+Parameters:
+  GithubOidcProviderArn:
+    Type: String
+    Default: ""
+  DatabaseEngineVersion:
+    Type: String
+    Default: "17.11"
+  BastionImage:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Conditions:
+  EnableGithubOidc: !Not [!Equals [!Ref GithubOidcProviderArn, ""]]
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{Key: Name, Value: zyk-dyna-admin-production}]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: {VpcId: !Ref Vpc, InternetGatewayId: !Ref InternetGateway}
+  PublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-public-a}]
+  PublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-public-b}]
+  AppA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-app-a}]
+  AppB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-app-b}]
+  DataA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.20.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-data-a}]
+  DataB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: 10.42.21.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags: [{Key: Name, Value: zyk-data-b}]
+  PublicRoutes:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  PublicDefault:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties: {RouteTableId: !Ref PublicRoutes, DestinationCidrBlock: 0.0.0.0/0, GatewayId: !Ref InternetGateway}
+  PublicAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicA, RouteTableId: !Ref PublicRoutes}
+  PublicAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicB, RouteTableId: !Ref PublicRoutes}
+  NatAddress:
+    Type: AWS::EC2::EIP
+    DependsOn: GatewayAttachment
+    Properties: {Domain: vpc}
+  Nat:
+    Type: AWS::EC2::NatGateway
+    Properties: {SubnetId: !Ref PublicA, AllocationId: !GetAtt NatAddress.AllocationId}
+  AppRoutes:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  AppDefault:
+    Type: AWS::EC2::Route
+    Properties: {RouteTableId: !Ref AppRoutes, DestinationCidrBlock: 0.0.0.0/0, NatGatewayId: !Ref Nat}
+  AppAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref AppA, RouteTableId: !Ref AppRoutes}
+  AppAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref AppB, RouteTableId: !Ref AppRoutes}
+  DataRoutes:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref Vpc}
+  DataAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref DataA, RouteTableId: !Ref DataRoutes}
+  DataAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref DataB, RouteTableId: !Ref DataRoutes}
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: {VpcId: !Ref Vpc, GroupDescription: Lambda outbound connections}
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: {VpcId: !Ref Vpc, GroupDescription: SSM bastion with no inbound access}
+  MigrationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: {VpcId: !Ref Vpc, GroupDescription: Database migration runner}
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref Vpc
+      GroupDescription: PostgreSQL from application, bastion and migration runner only
+      SecurityGroupIngress:
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref LambdaSecurityGroup}
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref BastionSecurityGroup}
+        - {IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref MigrationSecurityGroup}
+  DatabaseSubnets:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: {DBSubnetGroupDescription: Isolated Aurora subnets, SubnetIds: [!Ref DataA, !Ref DataB]}
+  Database:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref DatabaseEngineVersion
+      DatabaseName: zyk_dyna_admin
+      MasterUsername: zyk_admin
+      ManageMasterUserPassword: true
+      StorageEncrypted: true
+      BackupRetentionPeriod: 1
+      DeletionProtection: true
+      DBSubnetGroupName: !Ref DatabaseSubnets
+      VpcSecurityGroupIds: [!Ref DatabaseSecurityGroup]
+      ServerlessV2ScalingConfiguration: {MinCapacity: 0, MaxCapacity: 2, SecondsUntilAutoPause: 300}
+  DatabaseWriter:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref Database
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      PubliclyAccessible: false
+  ApplicationSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString: {SecretStringTemplate: '{"username":"zyk_app"}', GenerateStringKey: password, PasswordLength: 48, ExcludePunctuation: true}
+  AuthenticationSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      GenerateSecretString: {SecretStringTemplate: '{}', GenerateStringKey: secret, PasswordLength: 64, ExcludePunctuation: true}
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{Effect: Allow, Principal: {Service: lambda.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  BastionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{Effect: Allow, Principal: {Service: ec2.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      ManagedPolicyArns: [arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore]
+  BastionProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: {Roles: [!Ref BastionRole]}
+  Bastion:
+    Type: AWS::EC2::Instance
+    DependsOn: AppDefault
+    Properties:
+      ImageId: !Ref BastionImage
+      InstanceType: t3.micro
+      SubnetId: !Ref AppA
+      SecurityGroupIds: [!Ref BastionSecurityGroup]
+      IamInstanceProfile: !Ref BastionProfile
+      MetadataOptions: {HttpTokens: required}
+      BlockDeviceMappings: [{DeviceName: /dev/xvda, Ebs: {VolumeSize: 8, VolumeType: gp3, Encrypted: true, DeleteOnTermination: true}}]
+      Tags: [{Key: Name, Value: zyk-dyna-admin-bastion}]
+  Artifacts:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration: {Status: Enabled}
+      PublicAccessBlockConfiguration: {BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true}
+      BucketEncryption: {ServerSideEncryptionConfiguration: [{ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}}]}
+  MigrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: [{Effect: Allow, Principal: {Service: codebuild.amazonaws.com}, Action: 'sts:AssumeRole'}]
+      Policies:
+        - PolicyName: Migration
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - {Effect: Allow, Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'], Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'}
+              - {Effect: Allow, Action: ['s3:GetObject', 's3:GetObjectVersion', 's3:GetBucketLocation', 's3:GetBucketAcl'], Resource: [!GetAtt Artifacts.Arn, !Sub '${Artifacts.Arn}/*']}
+              - {Effect: Allow, Action: ['secretsmanager:GetSecretValue'], Resource: [!GetAtt Database.MasterUserSecret.SecretArn, !Ref ApplicationSecret]}
+              - {Effect: Allow, Action: ['ec2:CreateNetworkInterface', 'ec2:DescribeNetworkInterfaces', 'ec2:DeleteNetworkInterface', 'ec2:DescribeDhcpOptions', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups', 'ec2:DescribeVpcs', 'ec2:CreateNetworkInterfacePermission'], Resource: '*'}
+  MigrationProject:
+    Type: AWS::CodeBuild::Project
+    DependsOn: AppDefault
+    Properties:
+      ServiceRole: !GetAtt MigrationRole.Arn
+      Artifacts: {Type: NO_ARTIFACTS}
+      Source: {Type: S3, Location: !Sub '${Artifacts}/source.zip', BuildSpec: scripts/aws/buildspec.yml}
+      TimeoutInMinutes: 20
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:8.0
+        EnvironmentVariables:
+          - {Name: DB_ADMIN_SECRET, Type: SECRETS_MANAGER, Value: !GetAtt Database.MasterUserSecret.SecretArn}
+          - {Name: DB_APP_SECRET, Type: SECRETS_MANAGER, Value: !Ref ApplicationSecret}
+          - {Name: DB_HOST, Value: !GetAtt Database.Endpoint.Address}
+          - {Name: DB_NAME, Value: zyk_dyna_admin}
+      VpcConfig: {VpcId: !Ref Vpc, Subnets: [!Ref AppA, !Ref AppB], SecurityGroupIds: [!Ref MigrationSecurityGroup]}
+  GithubRole:
+    Type: AWS::IAM::Role
+    Condition: EnableGithubOidc
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: {Federated: !Ref GithubOidcProviderArn}
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:i-zyk/zyk-dyna-admin:ref:refs/heads/main
+      Policies:
+        - PolicyName: DeployApplication
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - {Effect: Allow, Action: ['cloudformation:DescribeStacks'], Resource: !Ref 'AWS::StackId'}
+              - {Effect: Allow, Action: ['lambda:GetFunction', 'lambda:GetFunctionConfiguration', 'lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:PutFunctionConcurrency'], Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:zyk-dyna-admin'}
+              - {Effect: Allow, Action: ['iam:PassRole'], Resource: !GetAtt LambdaRole.Arn}
+              - {Effect: Allow, Action: ['s3:PutObject', 's3:GetObject', 's3:GetObjectVersion'], Resource: !Sub '${Artifacts.Arn}/*'}
+              - {Effect: Allow, Action: ['codebuild:StartBuild', 'codebuild:BatchGetBuilds'], Resource: !GetAtt MigrationProject.Arn}
+              - {Effect: Allow, Action: ['secretsmanager:GetSecretValue'], Resource: [!Ref ApplicationSecret, !Ref AuthenticationSecret]}
+Outputs:
+  VpcId: {Value: !Ref Vpc}
+  AppSubnets: {Value: !Join [',', [!Ref AppA, !Ref AppB]]}
+  LambdaSecurityGroup: {Value: !Ref LambdaSecurityGroup}
+  LambdaRoleArn: {Value: !GetAtt LambdaRole.Arn}
+  DatabaseHost: {Value: !GetAtt Database.Endpoint.Address}
+  DatabaseName: {Value: zyk_dyna_admin}
+  DatabaseAdminSecretArn: {Value: !GetAtt Database.MasterUserSecret.SecretArn}
+  ApplicationSecretArn: {Value: !Ref ApplicationSecret}
+  AuthenticationSecretArn: {Value: !Ref AuthenticationSecret}
+  BastionInstanceId: {Value: !Ref Bastion}
+  ArtifactsBucket: {Value: !Ref Artifacts}
+  MigrationProject: {Value: !Ref MigrationProject}
+  GithubRoleArn: {Condition: EnableGithubOidc, Value: !GetAtt GithubRole.Arn}

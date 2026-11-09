@@ -1,0 +1,51 @@
+name: Deploy Server to AWS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["apps/server/**", "packages/api/**", "packages/auth/**", "packages/db/**", "scripts/aws/**", "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".github/workflows/deploy-server.yml"]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: aws-server-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      AWS_REGION: us-east-2
+      NEXT_PUBLIC_SERVER_URL: ${{ vars.NEXT_PUBLIC_SERVER_URL }}
+      API_UPSTREAM_URL: ${{ vars.API_UPSTREAM_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - name: Require AWS OIDC configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo '::error::Configure AWS_DEPLOY_ROLE_ARN after the AWS organization allows GitHub OIDC.'
+            exit 1
+          fi
+      - uses: actions/setup-node@v7
+        with: {node-version: "24", package-manager-cache: false}
+      - uses: pnpm/action-setup@v6
+        with: {cache: true}
+      - run: pnpm install --frozen-lockfile
+      - name: Build and verify Lambda package
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+        run: |
+          pnpm run build:lambda
+          pnpm --dir apps/server run test:lambda
+          pnpm exec turbo run check-types --filter=server
+          pnpm --dir packages/api run test
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - name: Migrate private database and deploy Lambda
+        run: node scripts/aws/deploy.mjs

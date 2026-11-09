@@ -1,3 +1,5 @@
+"use strict";
+
 module.exports = {
 	plugins: [
 		require("@varlock/expo-integration/babel-plugin"),

@@ -23,15 +23,16 @@ Token 只用于配置检查和部署步骤，不写进代码或 Web 构建产物
 | Variable | 内容 |
 | --- | --- |
 | `CLOUDFLARE_ACCOUNT_ID` | 现有 Worker 所在的 Cloudflare Account ID |
-| `NEXT_PUBLIC_SERVER_URL` | 真实可访问的生产后端 HTTPS 基础地址，例如 `https://api.example.com` |
+| `NEXT_PUBLIC_SERVER_URL` | Web 同源地址：`https://zyk-dyna-admin.izyk-me.workers.dev` |
+| `API_UPSTREAM_URL` | AWS API Gateway 的 HTTPS 基础地址：`https://jjdpgobje6.execute-api.us-east-2.amazonaws.com` |
 
 Account ID 可在 Cloudflare 控制台的账户或 Worker 详情中找到，它不是 API Token，也不是 Zone ID。
 
-`NEXT_PUBLIC_SERVER_URL` 不附加 `/api/auth` 或 `/trpc`；若 API Gateway 使用命名 stage，需要包含该 stage 路径。工作流会拒绝缺失配置、HTTP 地址、常见 localhost 地址，以及带凭据、查询参数或 fragment 的 URL。
+两个地址都不附加 `/api/auth` 或 `/trpc`。若 API Gateway 使用命名 stage，需要在 `API_UPSTREAM_URL` 中包含该 stage 路径。工作流会拒绝缺失配置，以及无效的公开 Web 地址。
 
 这个变量在构建时被 Varlock / Next.js 内联，修改 GitHub Variable 后需要重新运行工作流。只修改 Cloudflare 的运行时变量不会更新已有前端产物。
 
-**当前仓库尚未实现 Web 同源 API 代理。** 不要仅因为 Web 部署在 `https://zyk-dyna-admin.izyk-me.workers.dev`，就把它填成后端地址，否则 `/api/auth/*` 和 `/trpc/*` 会请求到不存在的 Web 路由。只有实现并验证同源代理后，才能把 Web 域名用作该变量。
+仓库已经实现 `/api/auth/*` 和 `/trpc/*` 同源代理，保留请求 Cookie、响应中的多个 `Set-Cookie`，并禁止缓存用户响应。Server Component 读取 session 时直接请求 `API_UPSTREAM_URL` 并转发 Cookie。两个地址不能相同，以免代理循环。
 
 ## 3. 触发部署
 
@@ -60,7 +61,7 @@ Account ID 可在 Cloudflare 控制台的账户或 Worker 详情中找到，它�
 
 ## 4. 本地构建、预览与部署
 
-先在 `apps/web/.env` 中配置实际的 `NEXT_PUBLIC_SERVER_URL`，然后从仓库根目录执行：
+先在 `apps/web/.env` 中配置实际的 `NEXT_PUBLIC_SERVER_URL` 和 `API_UPSTREAM_URL`，然后从仓库根目录执行：
 
 ```bash
 pnpm install --frozen-lockfile
@@ -81,7 +82,7 @@ pnpm --dir apps/web run deploy:cloudflare
 
 自动发布 Web 成功不代表后端和登录已经联通。后端还需要允许 Web 的准确 origin，并具备可用的数据库连接。
 
-当前 Web 在 Server Component 中读取 Cookie 校验 session。Web 与 AWS API 使用不同站点域名时，仅配置 CORS 和 `SameSite=None` 不能让 Cookie 出现在 Web 请求中；部分浏览器还会阻止第三方 Cookie。生产登录需要另行实现同源 API 代理，或使用自有共同父域并正确配置 Cookie 共享。
+生产环境的 `BETTER_AUTH_URL`、`CORS_ORIGIN` 都设为 Web 的 HTTPS 地址。浏览器通过 Web 同源代理登录，Cookie 由浏览器自动保存，无需手动填写 Cookie。原生端仍由 Better Auth Expo 插件把 session 存入 SecureStore，并由 tRPC 附带 Cookie。
 
 联调时验证：首页和登录页正常、登录请求成功、刷新受保护页面仍保持登录、人员接口可访问、退出后 session 失效。
 

@@ -86,6 +86,7 @@ describe("createGithubClient().getUser", () => {
 			createdAt: "2011-09-03T15:26:22Z",
 			followers: 200_000,
 			following: 0,
+			githubId: "1024025",
 			htmlUrl: "https://github.com/torvalds",
 			location: "Portland, OR",
 			login: "torvalds",

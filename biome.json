@@ -39,6 +39,7 @@
       "!**/prisma/generated",
       "!**/uniwind-types.d.ts",
       "!**/next-env.d.ts",
+      "!**/expo-env.d.ts",
       "!**/test-results",
       "!**/playwright-report",
       "!**/blob-report"

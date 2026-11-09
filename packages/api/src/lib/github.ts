@@ -21,6 +21,7 @@ export interface GithubUserProfile {
 	createdAt: string;
 	followers: number;
 	following: number;
+	githubId: string;
 	htmlUrl: string;
 	location: string | null;
 	login: string;
@@ -59,6 +60,7 @@ const githubUserResponseSchema = z.object({
 	followers: z.number(),
 	following: z.number(),
 	html_url: z.string(),
+	id: z.number().int().positive(),
 	location: z.string().nullish(),
 	login: z.string(),
 	name: z.string().nullish(),
@@ -79,6 +81,7 @@ const toProfile = (user: GithubUserResponse): GithubUserProfile => ({
 	createdAt: user.created_at,
 	followers: user.followers,
 	following: user.following,
+	githubId: String(user.id),
 	htmlUrl: user.html_url,
 	location: emptyToNull(user.location),
 	login: user.login,

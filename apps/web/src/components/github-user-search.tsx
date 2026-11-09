@@ -12,7 +12,7 @@ import {
 	parseGithubUsernameInput,
 } from "@/lib/github-username";
 import { useTRPC } from "@/utils/trpc";
-
+import { AddGithubPerson } from "./add-github-person";
 import { FieldMessages, getFieldA11yProps, toMessages } from "./field-messages";
 import { GithubUserCard, GithubUserCardSkeleton } from "./github-user-card";
 
@@ -147,7 +147,12 @@ export default function GithubUserSearch() {
 				</p>
 			) : null}
 
-			{profile ? <GithubUserCard profile={profile} /> : null}
+			{profile ? (
+				<>
+					<GithubUserCard profile={profile} />
+					<AddGithubPerson key={profile.githubId} username={profile.login} />
+				</>
+			) : null}
 		</section>
 	);
 }
