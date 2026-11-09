@@ -52,7 +52,7 @@ aws cloudformation deploy \
 
 ## 3. 部署 Lambda 和迁移数据库
 
-先保证现有 HTTP API `jjdpgobje6` 的 `ANY /`、`ANY /{proxy+}` 都集成到函数 `zyk-dyna-admin`，使用 payload v2 和 `$default` 自动部署 stage，并具备调用 Lambda 的权限。
+先保证现有 HTTP API `jjdpgobje6` 的 `ANY /`、`ANY /{proxy+}` 都集成到函数 `zyk-dyna-admin`，使用 payload v2 和 `$default` 自动部署 stage。模板授予该账号下这个 API 的路由调用 Lambda 的权限，使用实际请求路径通配符；不要把 `{proxy+}` 字面量当作 IAM 路径通配符。
 
 ```bash
 pnpm install --frozen-lockfile

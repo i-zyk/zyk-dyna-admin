@@ -13,6 +13,14 @@ Parameters:
 Conditions:
   EnableGithubOidc: !Not [!Equals [!Ref GithubOidcProviderArn, ""]]
 Resources:
+  HttpApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: zyk-dyna-admin
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:jjdpgobje6/*/*/*'
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
