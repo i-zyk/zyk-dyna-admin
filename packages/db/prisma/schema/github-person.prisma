@@ -1,0 +1,23 @@
+model GithubPerson {
+  id              String   @id @default(cuid())
+  githubId        String   @unique
+  login           String
+  avatarUrl       String
+  name            String?
+  displayName     String?  @db.VarChar(100)
+  bio             String?
+  company         String?
+  location        String?
+  blog            String?
+  htmlUrl         String
+  publicRepos     Int
+  followers       Int
+  following       Int
+  githubCreatedAt DateTime
+  note            String?  @db.VarChar(500)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([createdAt, id])
+  @@map("github_person")
+}

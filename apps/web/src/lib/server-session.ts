@@ -1,6 +1,11 @@
+import { createAuthClient } from "better-auth/client";
 import { headers } from "next/headers";
 
-import { authClient } from "@/lib/auth-client";
+import { ENV } from "@/env";
+
+const serverAuthClient = createAuthClient({
+	baseURL: ENV.API_UPSTREAM_URL ?? ENV.NEXT_PUBLIC_SERVER_URL,
+});
 
 /**
  * 在 Server Component 里读取当前登录用户：转发请求头（带上 cookie）调用 `authClient.getSession`。
@@ -11,9 +16,9 @@ import { authClient } from "@/lib/auth-client";
 export async function getServerSessionUser() {
 	const requestHeaders = await headers();
 	try {
-		const { data: session } = await authClient.getSession({
+		const { data: session } = await serverAuthClient.getSession({
 			fetchOptions: {
-				headers: requestHeaders,
+				headers: { cookie: requestHeaders.get("cookie") ?? "" },
 			},
 		});
 		return session?.user ?? null;

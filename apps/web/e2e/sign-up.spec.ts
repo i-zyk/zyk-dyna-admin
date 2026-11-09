@@ -206,7 +206,7 @@ test("注册请求进行中时按钮显示加载并禁用，不能重复提交",
 	const signUpReleased = new Promise<void>((resolve) => {
 		releaseSignUp = resolve;
 	});
-	await page.route(`${SERVER_URL}${SIGN_UP_PATH}`, async (route) => {
+	await page.route(`${WEB_URL}${SIGN_UP_PATH}`, async (route) => {
 		await signUpReleased;
 		await route.continue();
 	});

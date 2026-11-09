@@ -8,6 +8,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Sign in** with either username or email + password, and **sign out** from the header user menu
 - **Protected dashboard**: visiting `/dashboard` while signed out redirects to `/login`; visiting `/login` while signed in redirects to `/dashboard`
 - **GitHub user lookup** on `/dashboard`: enter a GitHub username to see the public profile (avatar, name, bio, company, location, blog, followers / following, public repos), with clear messages for invalid usernames, users not found, rate limits and upstream errors
+- **GitHub directory** on `/github-people`: save an authoritative GitHub profile from the dashboard, edit its display name and team notes, search saved people, and confirm removal. The Android app reads the same protected directory and shows profile details with pull-to-refresh.
 - **Person management** on `/persons` (header link「人员管理」, sign-in required): add, edit and delete people (name, employee number, phone, email, department, position, active / inactive status, remark). The list searches by name or employee number (case-insensitive), filters by status and pages 20 rows at a time. Employee numbers are stored upper-case and must be unique; deleting asks for confirmation and removes the record permanently. Every signed-in user can manage all people (no roles yet).
 
 Requirements and acceptance criteria live in [`docs/需求.md`](docs/需求.md) and [`specs/`](specs/README.md).
@@ -144,6 +145,7 @@ zyk-dyna-admin/
 
 - `pnpm run dev`: Start all applications in development mode
 - `pnpm run build`: Build all applications
+- `pnpm run build:lambda`: Generate Prisma Client and create the server Lambda ZIP
 - `pnpm run dev:web`: Start only the web application
 - `pnpm run dev:server`: Start only the server
 - `pnpm run check-types`: Check TypeScript types across all apps
@@ -161,9 +163,17 @@ zyk-dyna-admin/
 
 GitHub Actions builds and deploys `apps/web` to Cloudflare Workers using OpenNext when Web or shared-package changes are pushed to `main`. Manual deployment is also available from the Actions tab on `main`.
 
-Configure the `CLOUDFLARE_API_TOKEN` repository secret and the `CLOUDFLARE_ACCOUNT_ID` / `NEXT_PUBLIC_SERVER_URL` repository variables first. The workflow generates Prisma Client, checks lint and types, runs Web / API unit tests, builds the Worker, and deploys only if those steps pass. It does not need production database credentials or run database migrations.
+Configure the `CLOUDFLARE_API_TOKEN` repository secret and the `CLOUDFLARE_ACCOUNT_ID`, `NEXT_PUBLIC_SERVER_URL`, and `API_UPSTREAM_URL` repository variables first. The Web origin proxies authentication and tRPC requests to the physical API upstream. The workflow generates Prisma Client, checks lint and types, runs Web / API unit tests, builds the Worker, and deploys only if those steps pass. It does not need production database credentials or run database migrations.
 
 See [Cloudflare deployment setup](docs/cloudflare-deployment.md) for token permissions, environment configuration, manual commands, and authentication limitations. Build output goes to `.open-next/` and `.wrangler/`, both git-ignored.
+
+## Deployment (AWS Lambda)
+
+Run `pnpm run build:lambda` to create `apps/server/dist/server-lambda.zip`, then `pnpm --dir apps/server run test:lambda` to verify the extracted package outside the workspace. Use Node.js 24 and handler `index.handler`. See [Lambda deployment instructions](docs/lambda-deployment.md) for uploading to the existing function, HTTP API setup, environment variables, VPC / Aurora connectivity, and Web authentication requirements.
+
+The package includes the server's `.env.schema` and Varlock runtime, but no local `.env` files or resolved secrets. Configure production values in Lambda. Local Node development and builds continue to use `apps/server/src/index.ts`.
+
+See [the complete production deployment process](docs/production-deployment.md) for VPC / Aurora / NAT / SSM bastion infrastructure, private migrations, GitHub OIDC deployment, same-origin login cookies, Android APK builds, and cost controls. The template requires an AWS plan that permits VPC Aurora; free-plan credits alone do not remove that restriction.
 
 ## Better Auth Schema Generation
 

@@ -9,6 +9,7 @@
   "scripts": {
     "auth:generate": "cd apps/server && pnpm run auth:generate",
     "build": "turbo run build",
+    "build:lambda": "pnpm run db:generate && pnpm --dir apps/server run build:lambda",
     "check": "ultracite check",
     "check-types": "turbo run check-types",
     "db:generate": "turbo run db:generate -F @zyk-dyna-admin/db --",

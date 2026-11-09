@@ -43,7 +43,10 @@ export default defineConfig({
 			command: "pnpm run dev",
 			cwd: WEB_DIR,
 			// 让 Web 端请求固定发到上面连测试库的 server，而不是 .env 或 CI 里配置的地址
-			env: { NEXT_PUBLIC_SERVER_URL: SERVER_URL },
+			env: {
+				API_UPSTREAM_URL: SERVER_URL,
+				NEXT_PUBLIC_SERVER_URL: WEB_URL,
+			},
 			reuseExistingServer: false,
 			timeout: WEB_START_TIMEOUT_MS,
 			url: WEB_URL,

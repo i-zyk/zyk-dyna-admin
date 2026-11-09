@@ -1,3 +1,5 @@
+"use strict";
+
 // Hermes 260318099.0.4 (react-native 0.88) cannot compile async arrow functions
 // with a rest parameter, such as `async (...[input, options = {}]) => {}` in
 // @orpc/client. babel-preset-expo 58.0.18 dropped the transform that rewrote them.

@@ -1,0 +1,12 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      nodejs: 24
+    commands:
+      - npm install --global pnpm@12.18.0
+      - pnpm install --frozen-lockfile
+      - curl --fail --silent --show-error https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem --output /tmp/rds-ca.pem
+  build:
+    commands:
+      - node scripts/aws/migrate.mjs

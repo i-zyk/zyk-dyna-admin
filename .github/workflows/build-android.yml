@@ -1,0 +1,39 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-preview
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: "24", package-manager-cache: false}
+      - uses: pnpm/action-setup@v6
+        with: {cache: true}
+      - name: Require Expo CI token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo '::error::Create an Expo access token and save it as repository secret EXPO_TOKEN.'
+            exit 1
+          fi
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma types
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+        run: pnpm run db:generate
+      - run: pnpm exec turbo run check-types --filter=native
+      - name: Build installable Android package
+        working-directory: apps/native
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: pnpm dlx eas-cli@27.5.0 build --platform android --profile preview --non-interactive
