@@ -27,4 +27,3 @@ CREATE UNIQUE INDEX "github_person_githubId_key" ON "github_person"("githubId");
 
 -- CreateIndex
 CREATE INDEX "github_person_createdAt_id_idx" ON "github_person"("createdAt", "id");
-
